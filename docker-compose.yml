@@ -1,0 +1,10 @@
+version: '3'
+    
+services:
+  web:
+    build: .
+    volumes:
+      - .:/opt/tomcat/game-data
+      - ./saved:/opt/tomcat/saved
+    ports:
+      - "7150:8080"
