@@ -4,7 +4,7 @@ services:
   web:
     build: .
     volumes:
-      - .:/opt/tomcat/game-data
+      - ./game-data:/opt/tomcat/game-data
       - ./saved:/opt/tomcat/saved
     ports:
       - "7150:8080"
