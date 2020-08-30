@@ -1,10 +1,20 @@
 version: '3'
     
 services:
+  db:
+    image: mysql
+    ports:
+      - 3306:3306
+    environment: 
+      MYSQL_USER: game
+      MYSQL_DATABASE: game
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
   web:
     build: .
     volumes:
       - ./game-data:/opt/tomcat/game-data
       - ./saved:/opt/tomcat/saved
     ports:
-      - "7150:8080"
+      - 7150:8080
+    depends_on: 
+      - db
