@@ -63,12 +63,12 @@
             <property name="openjpa.ConnectionDriverName" 
                 value="com.mysql.cj.jdbc.Driver"/>
             <property name="openjpa.ConnectionURL" 
-		      value="jdbc:mysql://localhost/game?serverTimezone=UTC"/>
+		      value="jdbc:mysql://db/game?serverTimezone=UTC"/>
 	    
             <property name="openjpa.ConnectionUserName" 
-                value="game"/>
+                value="root"/>
             <property name="openjpa.ConnectionPassword" 
-                value="MySQL-W2020"/>
+                value=""/>
 
 	    <!-- general -->
             <property name="openjpa.jdbc.SynchronizeMappings" 

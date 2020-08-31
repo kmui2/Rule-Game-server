@@ -21,9 +21,12 @@ RUN mkdir /opt/tomcat/saved
 
 COPY . /w2020/game
 
+RUN rm -rf /w2020/game/lib
+
 COPY lib/jaxb-ri /w2020/jaxb-ri
 COPY lib/jaxrs-ri /w2020/jaxrs-ri
 COPY lib/apache-openjpa-3.1.0 /opt/apache-openjpa-3.1.0
+COPY lib/mysql-connector-java-8.0.21.jar /opt/tomcat/lib/mysql-connector-java-8.0.20.jar
 
 RUN cd /w2020/game && /opt/ant/bin/ant war
 
