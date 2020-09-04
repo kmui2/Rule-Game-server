@@ -63,7 +63,7 @@ public class Piece  implements Serializable {
     
     private static final long serialVersionUID = 1L;
 
-    // The link is used for JPA, but not JSON
+    // This back link and its "get" method are used for JPA, but not JSON
     //    @JsonIgnore
     @XmlTransient
     @ManyToOne(fetch = FetchType.EAGER)
@@ -71,8 +71,8 @@ public class Piece  implements Serializable {
  
 
     // Using "xget" instead of "get" to avoid looping (Board to Piece to Board...) during the conversion to JSON
-    @XmlTransient
-    public Board getBoard() { return board; }
+    //@XmlTransient
+    //public Board getBoard() { return board; }
     //   @XmlElement
     public void setBoard(Board _board) { board = _board; }
 
@@ -82,16 +82,15 @@ public class Piece  implements Serializable {
     @GeneratedValue(strategy=GenerationType.IDENTITY) 
     private long id;
     
-    //    private String id; 
-    // private String color; 
-    // private String shape;  
     private Color color; 
     private Shape shape;  
 
     private int x;
     private int y;
 
-    boolean dropped=false;
+    /** Empty vector for the pieces still on the board; contains the destination
+	bucket number for the pieces that have been removed */
+    Integer dropped=null;
     
     public long getId() { return id; }
   @XmlElement 
@@ -118,16 +117,16 @@ public class Piece  implements Serializable {
 
     
     public int getX() { return x; }
-  @XmlElement 
+    @XmlElement 
     public void setX(int _x) { x = _x; }
 
     public int getY() { return y; }
-  @XmlElement 
+    @XmlElement 
     public void setY(int _y) { y = _y; }
 
-    public boolean getDropped() { return dropped; }
-   @XmlElement
-   public void setDropped(boolean _dropped) { dropped = _dropped; }
+    public Integer getDropped() { return dropped; }
+    @XmlElement
+    public void setDropped(Integer _dropped) { dropped = _dropped; }
 
     public Piece(){} 
      

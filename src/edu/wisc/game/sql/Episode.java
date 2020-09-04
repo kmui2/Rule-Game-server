@@ -11,6 +11,7 @@ import javax.persistence.*;
 
 
 import edu.wisc.game.util.*;
+import edu.wisc.game.reflect.*;
 import edu.wisc.game.engine.*;
 import edu.wisc.game.parser.*;
 import edu.wisc.game.sql.Board.Pos;
@@ -94,8 +95,24 @@ public class Episode {
     /** Which row of rules do we look at now? (0-based) */
     @Transient
     private int ruleLineNo = 0;
+
     @Transient
     private RuleLine ruleLine = null;
+
+    /** Will return true if this is, apparently, an episode restored
+	from SQL server, and cannot be played anymore because the boad
+	position and the egine state (ruleLine) is not persisted. This
+	is a rare event; it may only become an issue if an episode for
+	some reason became persisted before it was finished (this is
+	rare; can be caused by cascading e.g. on an "Accept Bonus" event), 
+	and then the web app was restarted before the episode
+	was finished (this is even rarer).
+    */
+    boolean isNotPlayable() {
+	return ruleLine == null;
+    }
+    
+    
     /** Our interface to the current rule line. When pieces are removed, this
 	structure updates itself, until it cannot pick any pieces anymore. */
     class RuleLine {
@@ -222,7 +239,7 @@ public class Episode {
 
 	    doneMoveCnt++;
 	    removedPieces[move.pos] = pieces[move.pos];
-	    removedPieces[move.pos].setDropped(true);
+	    removedPieces[move.pos].setDropped(move.bucketNo);
 	    pieces[move.pos] = null; // remove the piece
 	    
 	    // Check if this rule can continue to be used, and if so,
@@ -309,7 +326,9 @@ public class Episode {
     public int getNPiecesStart() { return nPiecesStart; }
     public void setNPiecesStart(int _nPiecesStart) { nPiecesStart = _nPiecesStart; }
 
-    
+
+    /** Creates a new Episode for a given Game (which defines rules and the 
+	properties of the initial board). */
     public Episode(Game game, OutputMode _outputMode, Reader _in, PrintWriter _out) {
 	startTime = new Date();    
 	in = _in;
@@ -527,19 +546,22 @@ public class Episode {
     
 
     public Board getCurrentBoard() {
-	boolean showRemoved = this instanceof EpisodeInfo;
+	boolean showRemoved = (this instanceof EpisodeInfo);
 	return ruleLine==null? null:
 	    showRemoved ?    new Board(pieces, removedPieces, ruleLine.moveableTo()):
 	    new Board(pieces, null, ruleLine.moveableTo());
     }
+
+    /** No need to show this field */
+    private static final HashSet<String> excludableNames =  Util.array2set("dropped");
     
     private String displayJson() {
 	Board b = getCurrentBoard();
-	JsonObject json = JsonReflect.reflectToJSONObject(b, true);
+	JsonObject json = JsonReflect.reflectToJSONObject(b, true, excludableNames);
 	return json.toString();
     }
 
-    static final String version = "1.008";
+    static final String version = "1.011";
 
     private String readLine( LineNumberReader​ r) throws IOException {
 	out.flush();

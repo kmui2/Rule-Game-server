@@ -1,4 +1,4 @@
-package edu.wisc.game.sql;
+package edu.wisc.game.reflect;
 
 import java.util.*;
 import java.text.*;
@@ -8,9 +8,10 @@ import javax.json.*;
 import java.lang.reflect.*;
 import edu.wisc.game.util.Logging;
 
+/** Tools for exporting Java objects as JSON structures */
 public class JsonReflect {
 
-    private static JsonArrayBuilder doCollection(Collection col, boolean skipNulls) {
+    private static JsonArrayBuilder doCollection(Collection col, boolean skipNulls, HashSet<String> excludableNames) {
 	JsonArrayBuilder arrayBuilder = Json.createArrayBuilder();
 
 	//	System.out.println("doCollection, size=" + col.size());
@@ -32,13 +33,13 @@ public class JsonReflect {
 	    } else if (g instanceof Double) {
 		arrayBuilder.add( (Double)g);
 	    } else if (g instanceof Array) { // an array
-		JsonArrayBuilder x = doCollection(array2vector((Array)g), skipNulls);
+		JsonArrayBuilder x = doCollection(array2vector((Array)g), skipNulls, excludableNames);
 		arrayBuilder.add(x);		
 	    } else if (g instanceof Collection) {
-		JsonArrayBuilder ab = doCollection((Collection)g, skipNulls);
+		JsonArrayBuilder ab = doCollection((Collection)g, skipNulls, excludableNames);
 		arrayBuilder.add(ab);
 	    } else { // some object
-		JsonObjectBuilder ob = reflectToJSON(g, skipNulls);
+		JsonObjectBuilder ob = reflectToJSON(g, skipNulls,  excludableNames);
 		arrayBuilder.add(ob);
 	    }
 	}
@@ -46,14 +47,15 @@ public class JsonReflect {
     }
     
 
-    /** Convert an object to a JSON object, to the extent possible */
-    public static JsonObjectBuilder reflectToJSON(Object o, boolean skipNulls) {
+    /** Converts a Java object to a JSON object, to the extent possible */
+    public static JsonObjectBuilder reflectToJSON(Object o, boolean skipNulls, HashSet<String> excludableNames) {
 	
 	JsonObjectBuilder objectBuilder = Json.createObjectBuilder();
        
 	Reflect r = Reflect.getReflect(  o.getClass());
-	//Logging.info("Reflecting on " + o.getClass() +"; reflect=" + r + ", has " + r.entries.length + " entries");
+	//Logging.info("Reflecting on object "+o+", class="+ o.getClass() +"; reflect=" + r + ", has " + r.entries.length + " entries");
 	for(Reflect.Entry e: r.entries) {
+	    if (excludableNames!=null && excludableNames.contains(e.name)) continue;
 	    if (o instanceof OurTable &&((OurTable)o).ignores(e.name)) continue;
 	    Object val = null;
 	    try {
@@ -72,7 +74,6 @@ public class JsonReflect {
 	    Class c = val.getClass();
 	    //System.out.println("name=" + e.name +", val("+c+"; "+c.getName()+"; isArray"+c.isArray()+")=" + val);
 
-
 	    
 	    if (val instanceof String) {
 		objectBuilder.add(e.name, (String)val);
@@ -86,25 +87,27 @@ public class JsonReflect {
 		objectBuilder.add(e.name, (Double)val);
 	    } else if (val instanceof Enum) {
 		objectBuilder.add(e.name, val.toString());
+	    } else if (val instanceof Boolean) {
+		objectBuilder.add(e.name, val.toString());
 	    } else if (val instanceof Array) { // an array
 		//System.out.println("Array name=" + e.name +", size=" +Array.getLength(val));
-		JsonArrayBuilder ab = doCollection(array2vector((Array)val), skipNulls);
+		JsonArrayBuilder ab = doCollection(array2vector((Array)val), skipNulls, excludableNames);
 
 		objectBuilder.add(e.name,ab);
 	    } else if (c.isArray() && c.isInstance(new int[0])) { // an array int[]
 		//System.out.println("int[] name=" + e.name);
-		JsonArrayBuilder ab = doCollection(arrayInt2vector((int[])val), skipNulls);
+		JsonArrayBuilder ab = doCollection(arrayInt2vector((int[])val), skipNulls, excludableNames);
 
 		objectBuilder.add(e.name,ab);
 		
 	    } else if (val instanceof Collection) {
 		Collection col = (Collection)val;
 
-		JsonArrayBuilder ab = doCollection(col, skipNulls);
+		JsonArrayBuilder ab = doCollection(col, skipNulls, excludableNames);
 		objectBuilder.add(e.name, ab);
 	    } else { // some object
-		System.out.println("Treating ("+val+") as 'some object'");
-		JsonObjectBuilder ob =  reflectToJSON(val, skipNulls);
+		System.out.println("For key="+e.name+", treating val=("+val+") as 'some object'");
+		JsonObjectBuilder ob =  reflectToJSON(val, skipNulls, excludableNames);
 		objectBuilder.add(e.name, ob);
 	    }
 	}
@@ -130,9 +133,18 @@ public class JsonReflect {
 
 
     
-    /** Convert an object to a JSON object, to the extent possible */
+    /** Converts an object to a JSON object, to the extent possible */
     public static JsonObject reflectToJSONObject(Object o, boolean skipNulls) {
-	return reflectToJSON(o, skipNulls).build();
+	return reflectToJSON(o, skipNulls, null).build();
+    }
+    
+    /** Converts a Java object to a JSON object, to the extent possible.
+	@param o Object to convert
+	@param skipNulls If true, the output won't contain the fields that have null values in o
+	@param  excludableNames If not null, contains the set of field names that should be ignored.
+     */
+    public static JsonObject reflectToJSONObject(Object o, boolean skipNulls, HashSet<String> excludableNames) {
+	return reflectToJSON(o, skipNulls, excludableNames).build();
     }
 
 
