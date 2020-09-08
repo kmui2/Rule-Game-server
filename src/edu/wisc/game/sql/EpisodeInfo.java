@@ -32,6 +32,10 @@ public class EpisodeInfo extends Episode {
     public static Episode locateEpisode(String eid) {
 	return globalAllEpisodes.get(eid);
     }
+    public void cache() {
+    	globalAllEpisodes.put(episodeId, this);
+    }
+
     
     Date endTime;
     int finishCode;
@@ -40,13 +44,19 @@ public class EpisodeInfo extends Episode {
     public boolean isBonus() { return bonus; }
     public void setBonus(boolean _bonus) { bonus = _bonus; }
 
-    /** Set to true if this was a bonus-series episode, and the board was cleared
-	quickly enough for the bonus series to continue. */
+    /** Set to true if this was one of the "successful bonus episodes", i.e. 
+	bonus-series episode, and the board
+	was cleared quickly enough for the bonus series to
+	continue. */
+    boolean bonusSuccessful;
+   /** True if the bonus rewarded has been given for this
+    episode. This typically is the last episode of a successful
+    bonus subseries. */     
     boolean earnedBonus;
-    /** The standard reward that has been given for this episode */
+    /** The standard reward that has been given for this episode.  */
     int rewardMain;
-    /** The bonus reward that has been given for this episode. This value normally
-	appears in the last episode of a successful bonus subseries. */
+    /** The bonus reward that has been given for this episode. This episode 
+	has earnedBonus=true */
     int rewardBonus;
 
     /** The total reward earned in this episode */
@@ -89,17 +99,18 @@ public class EpisodeInfo extends Episode {
 	EpisodeInfo epi = new EpisodeInfo(game);
 	epi.bonus = bonus;
 	epi.seriesNo = seriesNo;
-	
-	globalAllEpisodes.put(epi.episodeId, epi);
+
+	epi.cache();
 	return epi;	    	      
     }
+
 
     /** An episode deserves a bonus if it was part of the bonus series,
 	has been completed, and was completed sufficiently quickly */
     boolean deservesBonus(double clearingThreshold ) {
-	earnedBonus = earnedBonus ||
+	bonusSuccessful = bonusSuccessful ||
 	    (bonus && cleared && attemptCnt <= getNPiecesStart() * clearingThreshold);
-	return earnedBonus;
+	return bonusSuccessful;
     }
 
     /** An episode was part of a bonus series, but has permanently failed to earn the
@@ -108,7 +119,7 @@ public class EpisodeInfo extends Episode {
 	return bonus && (givenUp || stalemate || cleared && !deservesBonus(clearingThreshold));
     }
 
-    public Display doMove(int y, int x, int by, int bx, int _attemptCnt) {
+    public Display doMove(int y, int x, int by, int bx, int _attemptCnt) throws IOException {
 	Display _q = super.doMove(y, x, by, bx, _attemptCnt);
 	if (isCompleted() && getPlayer()!=null) {
 	    getPlayer().ended(this);
@@ -121,7 +132,13 @@ public class EpisodeInfo extends Episode {
     
     /** Concise report, handy for debugging */
     public String report() {
-	return "["+episodeId+"; FC="+getFinishCode()+"; "+(bonus?"B":"M")+" " + attemptCnt + "/"+getNPiecesStart()  + " $"+getTotalRewardEarned()+"]";
+	return "["+episodeId+"; FC="+getFinishCode()+
+	    (getGuessSaved()? "g" : "") +   	    "; "+
+	    (earnedBonus? "BB" :
+	     bonusSuccessful? "B" :
+	     bonus?"b":"m")+" " +
+	    attemptCnt + "/"+getNPiecesStart()  +
+	    " $"+getTotalRewardEarned()+"]";
     }
     
     /** Shows tHe current board (including dropped pieces, which are labeled as such) */
