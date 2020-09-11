@@ -51,8 +51,10 @@ public class Episode {
     public static class Move {
 	/** The position of the piece being moved, in the [1:N*N] range */
 	int pos;
+	int pieceId = -1;
 	public int getPos() { return pos; }
-	/** (Attempted) destination, in the [0:3] range */
+        public int getPieceId() { return pieceId; }
+ 	/** (Attempted) destination, in the [0:3] range */
 	int bucketNo;
 	public int getBucketNo() { return bucketNo ; }
  	Move(int _pos, int b) { pos = _pos; bucketNo = b; }
@@ -60,6 +62,7 @@ public class Episode {
 	/** Acceptance code; will be recorded upon processing */
 	int code;
  	public int getCode() { return code; }
+	Date time = new Date();
    }
     
     final RuleSet rules;
@@ -80,9 +83,7 @@ public class Episode {
     int doneMoveCnt;
     @Transient
     Vector<Move> transcript = new Vector<>();
-    //@XmlElement
-    //public void setTranscript(Vector<Move> _transcript) { transcript = _transcript; }
-
+  
     /** Set when appropriate */
     boolean stalemate = false;
     boolean cleared = false;
@@ -100,7 +101,7 @@ public class Episode {
 
     /** Which row of rules do we look at now? (0-based) */
     @Transient
-    private int ruleLineNo = 0;
+    protected int ruleLineNo = 0;
 
     @Transient
     private RuleLine ruleLine = null;
@@ -230,7 +231,8 @@ public class Episode {
 
 	    move.piece =pieces[move.pos];
 	    if (move.piece==null) return move.code=CODE.EMPTY_CELL;	    
-
+	    move.pieceId = (int)move.piece.getId();
+	    
 	    BitSet[] r = acceptanceMap[move.pos];
 	    Vector<Integer> acceptingAtoms = new  Vector<>();
 	    for(int j=0; j<row.size(); j++) {
@@ -585,7 +587,7 @@ public class Episode {
 	return json.toString();
     }
 
-    static final String version = "1.015";
+    static final String version = "1.016";
 
     private String readLine( LineNumberReader​ r) throws IOException {
 	out.flush();
@@ -801,7 +803,7 @@ public class Episode {
 	synchronized(file_writing_lock) {
 	try {	    
 	    PrintWriter w = new PrintWriter(new	FileWriter(f, true));
-	    if (f.length()==0) w.println("#pid,episodeId,moveNo,y,x,by,bx,code");
+	    if (f.length()==0) w.println("#pid,episodeId,moveNo,timestamp,y,x,by,bx,code");
 	    Vector<String> v = new Vector<>();
 	    int k=0;
 	    for(Move move: transcript) {
@@ -809,6 +811,7 @@ public class Episode {
 		v.add(pid);
 		v.add(eid);
 		v.add(""+(k++));
+		v.add( sdf.format(move.time));
 		Board.Pos q = new Board.Pos(move.pos);
 		v.add(""+q.y);
 		v.add(""+q.x);
