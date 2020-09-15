@@ -4,8 +4,275 @@
 <body>
   <h1>Rule Game server data</h1>
 
-<p>
+    <p align="center"><em>Updated for Ver 1.016,  2020-09-09</em></p>
+
+
+  <h2>Introduction</h2>
+
+
+  <p>The data one stores on the Rule Game server can be broadly divided into 3 large groups:
+    <ol>
+      <li>Read-only data. These data describe the design of the experiments and the rules of the game. They are created by our research staff, and the server has no business modifying them. We keep these data in CSV, JSON, and text data files in several subdirectories under the <strong>Rule Game server input data directory</strong>, <tt>/opt/tomcat/game-data</tt>.
+
+      <li>Read-and-write data. This includes several tables describing the progress of the players in their experiments. By their nature, the server needs both to read and write these data. They are currently stored in several tables in a relational database in the MySQL server.
+
+      <li>Write-only data. Certain data, such as the record of completed episodes, are created by the server, but the server does not need to read them back. These data are written into CSV files that live under the  <strong>Rule Game server saved data directory</strong>, <tt>/opt/tomcat/saved</tt>.
+    </ol>
+  </p>
+
+  <h2>Main concepts: players, experiment plans, trial lists, series, episodes</h2>
+
+  <p>A  <strong>player</strong> is a human being participating in our experiments pursuant to a particular experiment plans. A player is identified by a string 
+    <strong>playerId</strong>.</p>
+
+  <p>An  <strong>experiment plan</strong> is described by a set of <strong>trial lists.</strong> Each trial list describes the sequence of experiences (or a "treatment") in which a certain group of players will participatye.     Whenever a player starts participating in an experiment (is about to start playing), he is automatically assigned to one of the trial lists; this is association is permanent, i.e. all experiences of this player will follow that trial list.</P>
+
+  <p>A  <strong>trial list</strong> is a detailed "road map" to what a player associated with that trial list may experience. A trial list is described by a CSV files consisting of several lines of data. Each line specifies a <strong>parameter set</strong>; the parameters in the parameter set determine what kind of game will be played (by referring to a specific rule set file), what the initial boards may look like, how many episodes may be played, how rewards will be assigned, etc.  The player will progress through the lines of the trial list in the sequence in which they appear in the trial list file, i.e. once you complete a certain number of episodes pursuant by one parameter set (a <strong>series</strong> of episodes), you will be able to (or you will have to) switch to the next parameter set; there is no going back.  The series of episodes played in accordance with a given parameter set may be divided into the main subseries and the bonus subseries. For details, see the document on <a href="control-flow.html">Control flow</a>.</P>
+
+<p>A series consists of <strong>episodes</strong>. An episode is one instance of playing a game, from setting up an initial board to clearing it. An episode, therefore, can be represented by the initial board and the sequence of moves, together with a reference to the set of rule under which the episode was played.</p>
+
+<p>See also Paul's document, <a href="https://docs.google.com/document/d/13ZZ9nUXOTmQTWSaR8v-UuvCeCAoXGd6nEKJCHSsztlk/edit">_0.Terminology</a>.</P>
+
+  <h2><a name="players">The meaning of PlayerId</a></h2>
+
+  <p>At present (ver. 1.016, 2020-09-10), the Rule Game web server associates players with expreriment plans based on the PlayerId.  The assignment rules are as follows:
+
+    <ul>
+      <li>If the PlayerId has no hyphens in it, it is associated with the experiment plan <tt>default</tt>.
+      <li>If the PlayerId has a hyphen in it, the part of the PlayerID preceding the hyphen (or preceding the first hyphen, if there are several) is taken to be the name of the experiment plan. For example, if PlayerId=<tt>qt-01-a</tt>, it will be considered belonging to experiment plan <tt>qt</tt>.
+    </ul>
+  </p>
   
+  <p>Presently (2020-09-10) we only have two experiment plans,  <tt>default</tt> and  <tt>qt</tt>, so if one tries to register a PlayerId with a hyphen in it and the prefix part other than these, it will cause an error.
+    
+
+    <h2>Read-only data: input files</h2>
+
+    <h3>Trial list files</h3>
+
+  <p>The trial list files are in subdirectories of the main trial list directory, <tt>/opt/tomcat/game-data</tt>. For each experiment plan, the subdirectory name is identical to that of the experiment plan; so, for example, the trial list files for the experiment plan <tt>default</tt>, sent by Gary in mid-August 2020, are in <tt>/opt/tomcat/game-data/default</tt>.
+  </p>
+
+  <p>When a player first enters the system, the server figures what experiment plan the player is associated with (as per <a href="#players">The meaning of PlayerId</a>, above). Among all the trial list files located in that experiment's trial list, the server picks one  trial list file more or less at random, the main consideration being to assign approximately equal number of players to each trial list. Once the assignment has been completed, it is permanently recorded in the <a  href="#PlayerInfo">table</a>, for use in all episodes played by this player.</p>
+
+  <p>Each row of the trial list file contains a parameter set. The meaning of parameters is explained briefly in the following document compiled by Paul:
+  <a href="https://docs.google.com/spreadsheets/d/1KoYdi0i_toN29hhPiOVA-teX1jjo6WlJs7wL6Oz0AzM/edit#gid=0">_0.GameParameters</a>. However, parameters <tt>n</tt> and  <tt>b</tt> mentioned in that document are not actually used. See  the document on <a href="control-flow.html">Control flow</a> for additional discussion of how some parameters are used by the server when directing a player's activities and playing games.</P>
+    
+   <h3>Rule sets</h3>
+
+  <p>Each line of a trial list file, i.e. each parameter set, contains parameter <tt>rule_id</tt>, which refers to a particular set of rules for playing the game. The rule set files are all in  <tt>/opt/tomcat/game-data/rules</tt>; the name of each file consists of the value of the  <tt>rule_id</tt> parameter and the extension  <tt>.txt</tt>.</p>
+
+  <p>For the syntax and semantics of the rule sets, see the document <a href="https://docs.google.com/document/d/1z_I1kbu-cocUUxOsoEU0WUK9gd3OZ3KiqisJw_Fn_tw/edit?ts=5f08503a">_0.Semantics2020.07.10.txt</a>.</p>
+
+  <h3>Initial board</h3>
+
+  <p>When creating an episode, it is possible to load the initial board description from a JSON file. Even though presently (ver 1.016) the trial lists do not have support for specifying pre-created initial boards for the use in experiment, we do have a directory for them, in <tt>/opt/tomcat/game-data/boards</tt>.
+
+    <h2>Read-and-write data: SQL server tables</h2>
+
+  <p>There are two tables you'll be using, <tt>PlayerInfo</tt> and <tt>Episode</tt>.
+
+    <h3>PlayerInfo</h3>
+
+<p>There is one PlayerInfo entry (table row) for each player.
+    
+<pre>
+mysql> describe  PlayerInfo;
++-------------------+--------------+------+-----+---------+----------------+
+| Field             | Type         | Null | Key | Default | Extra          |
++-------------------+--------------+------+-----+---------+----------------+
+| id                | bigint(20)   | NO   | PRI | NULL    | auto_increment |
+| currentSeriesNo   | int(11)      | YES  |     | NULL    |                |
+| date              | datetime     | YES  |     | NULL    |                |
+| inBonus           | bit(1)       | YES  |     | NULL    |                |
+| playerId          | varchar(255) | YES  |     | NULL    |                |
+| totalRewardEarned | int(11)      | YES  |     | NULL    |                |
+| trialListId       | varchar(255) | YES  |     | NULL    |                |
+| experimentPlan    | varchar(255) | YES  |     | NULL    |                |
++-------------------+--------------+------+-----+---------+----------------+
+</pre>
+
+  <p>The meaning of the columns is as follows:
+
+    <ol>
+      <li>id - the internal integer ID used by the MySQL database for the player. It is not to be consfused with the PlayerID (a string). This ID is only used to link entries in the Episode table with those in the PlayerInfo table.
+      <li>currentSeriesNo - an integer indicating which series the player is currently playing, or is about to start playing. The value is 0-based, which means that a player who has not completed any episodes yet, or is still working under the very first of the parameter sets in his trial list, will have currentSeriesNo=0, etc. If a player's trial list has, for example, 4 rows (4 parameter sets), then once the player has completed all his 4 series, he will have currentSeriesNo=0.
+      <li>date - when the player entered the system (started playing)
+      <li>inBonus - a bit value. It starts with false, and becomes true if/when the player activates his bonus. It will stay true while the player plays episodes of the subseries of his current series; it will become false again one the bonus subseries ends (either with earning a bonus, or with a failure, or with "giving up"), and the player switches to the next parameter set's series.
+      <li>playerId - the string playerId, identifies the player
+      <li> totalRewardEarned - the total number of points earned in all episodes so far, including the "base pay" and any bonuses
+      <li>trialListId - a string that identifies the trial list to which the player has been assigned within his experiment plan
+      <li>experimentPlan  - the expeirment plan to which this player belongs
+    </ol>
+
+
+    <h3>Episode</h3>
+
+  <p>The <tt>Episode</tt> table has one entry (row) for each episode played by each player.
+
+<pre><code>
+mysql> describe  Episode;
++-----------------+--------------+------+-----+---------+----------------+
+| Field           | Type         | Null | Key | Default | Extra          |
++-----------------+--------------+------+-----+---------+----------------+
+| id              | bigint(20)   | NO   | PRI | NULL    | auto_increment |
+| attemptCnt      | int(11)      | YES  |     | NULL    |                |
+| cleared         | bit(1)       | YES  |     | NULL    |                |
+| doneMoveCnt     | int(11)      | YES  |     | NULL    |                |
+| episodeId       | varchar(255) | YES  |     | NULL    |                |
+| givenUp         | bit(1)       | YES  |     | NULL    |                |
+| nPiecesStart    | int(11)      | YES  |     | NULL    |                |
+| stalemate       | bit(1)       | YES  |     | NULL    |                |
+| startTime       | datetime     | YES  |     | NULL    |                |
+| DTYPE           | varchar(255) | YES  | MUL | NULL    |                |
+| bonus           | bit(1)       | YES  |     | NULL    |                |
+| earnedBonus     | bit(1)       | YES  |     | NULL    |                |
+| endTime         | datetime     | YES  |     | NULL    |                |
+| finishCode      | int(11)      | YES  |     | NULL    |                |
+| rewardBonus     | int(11)      | YES  |     | NULL    |                |
+| rewardMain      | int(11)      | YES  |     | NULL    |                |
+| seriesNo        | int(11)      | YES  |     | NULL    |                |
+| PLAYER_ID       | bigint(20)   | YES  | MUL | NULL    |                |
+| guessSaved      | bit(1)       | YES  |     | NULL    |                |
+| bonusSuccessful | bit(1)       | YES  |     | NULL    |                |
++-----------------+--------------+------+-----+---------+----------------+
+</code></pre>
+
+ <p>The meaning of the columns is as follows:
+
+    <ol>
+      <li>id - internal episode ID; we can use them to sort episodes in the chronological order, but otherwise we can ignore it.
+      <li>attemptCnt - the number of attempted (successful or unsuccessful) moves
+      <li>cleared - true if the board has been cleared (has no pieces left)
+      <li>doneMoveCnt  - the number of successful moved (i.e. the number of pieces removed from the board)
+      <li>episodeId - a string episode ID used by our system.
+      <li> givenUp - true if the player has explicitly "given up" on this episode, or if it has been found that the episode has been abandoned, and another episode started instead
+      <li>nPiecesStart - the initial number of pieces on the board
+      <li>stalemate - true if the episode has ended in stalemate, i.e. there are some pieces on the board, but none of them can be moved
+      <li>startTime - timestamp
+      <li> DTYPE - ignore this field
+      <li> bonus - true if this episode is part of the bonus series
+      <li> earnedBonus  - true if the bonus reward on completion of this episode.  This typically is the last episode of a successful bonus subseries (i.e. in this series every episode with bonus=true also has bonusSuccessful=true, the number of these episodes is equal to the value of the parameter <tt>clear_how_many</tt>, and this episode is the last one in this subseries).
+      <li> endTime - timestamp
+      <li>finishCode - an integer that summarizes the overall state of the game. The value of 0 means that the episode is still continuing; other values refer to the way in which it has terminated, as per <a href="api/constant-values.html#edu.wisc.game.sql.Episode.FINISH_CODE.FINISH">FINISH_CODE</a>.
+      <li>rewardBonus - the number of bonus points awarded at the completion of this episode. This may be non-zero only if earnedBonus=true.
+      <li>rewardMain - the "base pay" reward, awarded to this episode based on how many moves it took the player to clear the board, according to the formula in Gary's document, <a href="https://rulegame.slack.com/files/UKF4M2Y4D/F019E2J188L/points_gameplay.pdf">points_gameplay.pdf</a>
+	<li>seriesNo - the 0-based number of the current series of episodes played by this user (i.e. the sequential number of the current parameter set in the trial list). After all parameter sets' series have been played, seriesNo is equal to the number of parameter sets in the trial file.
+	  <li>PLAYER_ID - MySQL internal ID of the player; only used to join with the PlayerInfo table
+	  <li>guessSaved - true if the player's guess about the rules has been submitted and recorded at the end of this episode.
+	  <li>bonusSuccessful - true if this was a bonus episode (bonus=true) and the player managed to clear the board sufficiently fast. If a required number of episodes with bonusSuccessful=true is 
+
+    </ol>
+
+    <h3> Exporting data from the MySQL database to CSV files</h3>
+
+ <p>There are many ways to export the content of SQL tables to CSV files. As an example, I have supplied a script that resides on sapir in <code>~vmenkov/w2020/game/sql/export.sh</code>. In order to be able to use this particular script, you must have possess several qualifications:
+<ul>
+  <li>Be a UNIX user with a membership in <tt>mysql</tt> group. (This is needed to be able to access MySQL's export directory; presently, I set permissions for it with g+rwX).
+  <li>Have a MySQL server account
+  <li>Have password-less access to this account. (This is configured using the <tt>auth_socket</tt> plugin, so that the MySQL server allows you to access the databases based on your UNIX user credentials)
+</ul>
+
+<p>
+Before using the script, switch to your <tt>mysql</tt> group:
+<pre>
+  newgrp mysql
+</pre>
+Then run the script:
+<pre>
+~vmenkov/w2020/game/sql/export.sh
+</pre>
+This will create 2 CSV files, PlayerInfo.csv and Export.csv, in your current directory. There are no header lines in them, but the columns are ordered the same way as described above.
+
+<h2>Write-only data</h2>
+
+<p>At the end of each episode, the Game server saves the essential information about the episode into CSV file. That includes the initial board description, all the attempted moves (successful and unsuccessful), and any guess submitted by the player.
+
+  <h3>The initial board</h3>
+
+  <p>The initial boards are saved in  /opt/tomcat/saved/boards/ , in file names based on the PlayerID + ".board.csv".
+<pre>
+       more /opt/tomcat/saved/boards/qt-07.boards.csv
+#playerId,episodeId,y,x,shape,color
+qt-07,20200910-122815-2S2435,4,1,STAR,BLACK
+qt-07,20200910-122815-2S2435,5,4,STAR,BLACK
+qt-07,20200910-123116-PRDLET,3,1,TRIANGLE,BLACK
+qt-07,20200910-123116-PRDLET,5,1,TRIANGLE,BLACK
+</pre>
+
+
+<p>For each piece, we have it y and x coordinates (y=row, x=column), shape and color.
+
+<h3>The transcript</h3>
+
+ <p>The transripts are saved in  /opt/tomcat/saved/transcripts/ , in file names based on the PlayerID + ".transcript.csv".
+
+<pre>
+more /opt/tomcat/saved/transcripts/qt-07.transcripts.csv 
+#pid,episodeId,moveNo,timestamp,y,x,by,bx,code
+qt-07,20200910-122815-2S2435,0,20200910-122851,4,1,0,0,0
+qt-07,20200910-122815-2S2435,1,20200910-122902,5,4,7,0,0
+qt-07,20200910-123116-PRDLET,0,20200910-123125,3,1,7,7,0
+qt-07,20200910-123116-PRDLET,1,20200910-123151,5,1,7,7,0
+</pre>
+
+<p>For each move, we have the coordinates (y=row, x=column) of the piece that the player tries to move, and of the destination bucket. (The four buckets are supposed to be located in columns 0 and 7, and rows 0 and 7).
+
+<p>The last column, code, contains the server response. The value 0 is on success, positive values on rejection, as per <a href="api/constant-values.html#edu.wisc.game.sql.Episode.CODE.ACCEPT">CODE</a>.
+
+
+<h3>The guess</h3>
+
+
+ <p>The guesses are saved in  /opt/tomcat/saved/guesses/ , in file names based on the PlayerID + ".guess.csv".
+
+<pre>
+more /opt/tomcat/saved/guesses/qt-05.guesses.csv 
+qt-05,20200908-131729-0ILKQD,TD-01,ok
+qt-05,20200908-131908-6SXUPL,TD-01,should give us 2nd bonus episode now!
+qt-05,20200908-131943-MP1B3R,TD-01,must go to next series now
+</pre>
+
+<h2>Working with the data</h2>
+
+ <p>Below are some examples of how, in general terms, the data can be processed. While the discussion of the data processing in each example is given in general terms, it is not difficult to convert it to specific SQL queries or operations with lists and hash tables in a language such as Perl or Python.
+
+   <h3>Example 1: Identify and analyze all episodes played by the rules of a particular rule set R by players enrolled in a particular experiment plan E</h3>
+
+ <p>This can proceed as follows:</p>
+
+ <ol>
+
+   <li>Scan the trial list files in the directory for experiment plan E, creating a table that indicates, for each trial list name, what position (0-based) in that trial list the rule set R occupies. Let's call this table T1.
+ 
+   <li>From the PlayerInfo table, select the playerId and the internal database id of all players who are enrolled in experiment plan E. One can call the resulting table T2.
+
+   <li>Using table T1, and each player's trial list name (as recorded in the PLayerInfo table) determine, for each of the players identified in the previous step, what is the seriesNo of the series played by rule set R. Let's call the resulting table (mapping the internal database id of the player to the relevant seriesNo) T3.
+
+   <li>Now, look at the Episode table, and use table T3 to retrieve the Episode entries where the player is one of those participating in experiment E, and the rule set is R. Let's call this list of episodes "table T4". 
+
+   <li>By looking at table T3, one can find out all relevant statistics about the episodes under consideration, e.g. how many pieces were initially on the board in each experiment, whether the episode was completed or given up,  and how many moves it took to clear the board.
+
+   <li>Furthermore, if the specific initial board positions and the episode transcripts are of interest, the relevant lines  can be retrieved from the files in the boards and transcripts directories. One needs to look at the files corresponding to the players listed in T1, and from these files, select lines where the episode ID is in the list T4.
+
+     </ol>
+
+
+
+   
+
+     
+       
+
+   
+
+   
+
+   
+   <hr>
+
+
+<p><em>I will write one more section here, explaining how to put the data together, on a few simple examples.</em></p>
 
 </body>
 </html>
