@@ -58,11 +58,11 @@ public class NewEpisodeWrapper2 extends ResponseBase {
     NewEpisodeWrapper2(String pid, boolean existing, boolean activateBonus, boolean giveUp) {
 
 	Logging.info("NewEpisodeWrapper2(pid="+ pid+", existing="+existing+
-		     ", activate="+activateBonus+", gu=" + giveUp);
+		     ", activate="+activateBonus+", gu=" + giveUp+")");
 	
 	ResponseBase r=null;
 	if (activateBonus) {
-	    r = new  ActivateBonusWrapper(pid);
+	    r = new ActivateBonusWrapper(pid);
 	}
 	if (giveUp && (r==null || !r.getError()) )  {
 	    r = new GiveUpWrapper(pid);
@@ -75,7 +75,7 @@ public class NewEpisodeWrapper2 extends ResponseBase {
 	
 	try {
 	    // register the player if he has not been registered
-	    PlayerResponse q =new PlayerResponse(pid);
+	    PlayerResponse q =new PlayerResponse(pid, null);
 	    if (q.error) {
 		setError(true);
 		setErrmsg(q.getErrmsg());
@@ -90,9 +90,9 @@ public class NewEpisodeWrapper2 extends ResponseBase {
 		setErrmsg("Player not found: " + pid);
 		return;
 	    } 
+	    EpisodeInfo epi = existing? x.mostRecentEpisode(): x.episodeToDo();
 	    alreadyFinished = x.alreadyFinished();
 	    completionCode = x.getCompletionCode();
-	    EpisodeInfo epi = existing? x.mostRecentEpisode(): x.episodeToDo();
 	    if (epi==null) {
 		setError(true);
 		String msg = alreadyFinished ?

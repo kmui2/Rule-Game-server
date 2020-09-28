@@ -147,7 +147,7 @@ public class Episode {
 	    ourCounter = new int[row.size()];
 	    for(int i=0; i<ourCounter.length; i++) ourCounter[i] = row.get(i).counter;
 	    doneWith = exhausted() || !buildAcceptanceMap();
-	    //	    System.err.println("Constructed "+ this+"; exhausted()=" + exhausted()+"; doneWith =" + doneWith);
+	    //   	    System.err.println("Constructed "+ this+"; exhausted()=" + exhausted()+"; doneWith =" + doneWith);
 	}
 
 	/** This is set once all counters are exhausted, or no more
@@ -180,12 +180,17 @@ public class Episode {
 	    @return true if at least one piece can be moved
 	*/
 	private boolean buildAcceptanceMap() {
+
+	    EligibilityForOrders eligibleForEachOrder = new EligibilityForOrders();
+	    //System.err.println("eligibileForEachOrder=" + eligibleForEachOrder);
+
+	    
 	    for(int pos=0; pos<pieces.length; pos++) {
 		if (pieces[pos]==null) {
 		    acceptanceMap[pos]=null;
 		    isMoveable[pos]=false;
 		} else {
-		    acceptanceMap[pos] = pieceAcceptance(pieces[pos]);
+		    acceptanceMap[pos] = pieceAcceptance(pieces[pos], eligibleForEachOrder);
 		    BitSet r = new BitSet(); // to what buckets this piece can go
 		    for(BitSet b: acceptanceMap[pos]) {
 			r.or(b);
@@ -210,8 +215,9 @@ public class Episode {
 	   @return result[j] is the set of buckets into which the j-th
 	   rule (atom) allows the specified piece to be moved.
 	*/
-	private BitSet[] pieceAcceptance(Piece p) {
-	    //	    System.err.println("pieceAcceptance(p=" +p+")");
+	private BitSet[] pieceAcceptance(Piece p,  EligibilityForOrders eligibleForEachOrder) {
+	    
+	    //System.err.println("pieceAcceptance(p=" +p+")");
 	    if (doneWith) throw new IllegalArgumentException("Forgot to scroll?");
 
 	    if (row.globalCounter>=0 &&  ourGlobalCounter<=0)  throw new IllegalArgumentException("Forgot to set the scroll flag on 0 counter!");
@@ -230,11 +236,12 @@ public class Episode {
 		if (atom.counter>=0 && ourCounter[j]==0) continue;
 		if (atom.shape!=null && atom.shape!=p.getShape()) continue;
 		if (atom.color!=null && atom.color!=p.getColor()) continue;
-
+		//System.err.println("Atom " +j+" shape and color OK");
 		if (!atom.plist.allowsPicking(pos.num(), eligibleForEachOrder)) continue;
+		//System.err.println("Atom " +j+" allowsPicking ok");
 		BitSet d = atom.bucketList.destinations( varMap);
 		whoAccepts[j].or(d);
-		//	System.err.println("pieceAcceptance(p=" +p+"), dest="+d+", whoAccepts["+j+"]=" + 	whoAccepts[j]);
+		//System.err.println("pieceAcceptance(p=" +p+"), dest="+d+", whoAccepts["+j+"]=" + 	whoAccepts[j]);
 	    }
 	    return whoAccepts;
 	}
@@ -244,7 +251,7 @@ public class Episode {
 	    in case of acceptance, decrements appropriate counters */
 	int accept(Move move) {
 
-	    //	    System.err.println("Accept: "+this+", move="+ move);
+	    //System.err.println("RL.accept: "+this+", move="+ move);
 	    
 	    if (doneWith) throw  new IllegalArgumentException("Forgot to scroll?");
 	    transcript.add(move);
@@ -267,7 +274,7 @@ public class Episode {
 		}
 	    }
 	    
-	    //	    System.err.println("Acceptors: " + String.join(" ", v));
+	    //System.err.println("Acceptors: " + String.join(" ", v));
 	    if (acceptingAtoms.isEmpty()) return  move.code=CODE.DENY;
 
 	    //--- Process the acceptance -------------------------
@@ -279,11 +286,13 @@ public class Episode {
 	    pcMap.put(move.piece.getColor(), move.bucketNo);
 	    psMap.put(move.piece.getShape(), move.bucketNo);
 	    pMap = move.bucketNo;
-	    
+
+	    pieces[move.pos].setBuckets(new int[0]); // empty the bucket list for the removed piece
 	    removedPieces[move.pos] = pieces[move.pos];
 	    removedPieces[move.pos].setDropped(move.bucketNo);
 	    pieces[move.pos] = null; // remove the piece
-	    
+	    //System.err.println("Removed piece from pos " + move.pos);
+		    
 	    // Check if this rule can continue to be used, and if so,
 	    // update its acceptance map
 	    doneWith = exhausted() || !buildAcceptanceMap();
@@ -357,7 +366,7 @@ public class Episode {
    
     static final DateFormat sdf = new SimpleDateFormat("yyyyMMdd-HHmmss");
     /** with milliseconds */
-    private static final DateFormat sdf2 = new SimpleDateFormat("yyyyMMdd-HHmmss.SSS");
+    static final DateFormat sdf2 = new SimpleDateFormat("yyyyMMdd-HHmmss.SSS");
 
     /** Creates a more or less unique string ID for this Episode object */
     private String buildId() {
@@ -498,10 +507,22 @@ public class Episode {
 		put(name,  eligible);
 	    }
 	}
+
+	EligibilityForOrders() {
+	    super();
+	    update();			
+	}
+
+	public String toString() {
+	    Vector<String> v= new Vector<>();
+	    for(String key: keySet()) {
+		v.add("Eli(" + key+")="+ get(key));
+	    }
+	    return "[Eligibility: "+String.join("; " , v)+"]";
+	}
+	
     }
 
-    @Transient
-    private EligibilityForOrders eligibleForEachOrder = new EligibilityForOrders();
 
     /** Run this method at the beginning of the game, and
 	every time a piece has been removed, to update various
@@ -513,18 +534,19 @@ public class Episode {
 
 	// Which pieces currently on the border can be picked under
 	// various ordering schemes?
-	eligibleForEachOrder.update();
+	//	eligibleForEachOrder.update();
+	//	System.err.println("doPrep: eligibileForEachOrder=" + eligibleForEachOrder);
 
 	boolean mustUpdateRules = (ruleLine==null || ruleLine.doneWith);
 
-	//System.err.println("doPrep: mustUpdateRules=" + mustUpdateRules +", ruleLineNo="+ ruleLineNo);
+	//	System.err.println("doPrep: mustUpdateRules=" + mustUpdateRules +", ruleLineNo="+ ruleLineNo);
 
 
 	
 	if (mustUpdateRules) {
 	    ruleLineNo= (ruleLine==null) ? 0: (ruleLineNo+1) %rules.rows.size();
 	    ruleLine = new RuleLine(rules, ruleLineNo);
-	    //	    System.err.println("doPrep: updated ruleLineNo="+ ruleLineNo+", doneWith=" + ruleLine.doneWith);
+	    //System.err.println("doPrep: updated ruleLineNo="+ ruleLineNo+", doneWith=" + ruleLine.doneWith);
 
 	    final int no0 = ruleLineNo;
 	    // if the new rule is exhausted, or allows no pieces to be moved,
@@ -556,7 +578,7 @@ public class Episode {
 	    return CODE.STALEMATE;
 	}
 	if (move.pos<1 || move.pos>=pieces.length) return CODE.INVALID_POS;
-	// FIXME code here
+
 	int code = ruleLine.accept(move);
 
 	if (code==CODE.ACCEPT && !cleared && !stalemate && !givenUp) {
@@ -566,7 +588,7 @@ public class Episode {
 	return code;
     }
 
-    private static HTMLFmter  fm = new HTMLFmter(null);
+    private static HTMLFmter fm = new HTMLFmter(null);
 
 
     /** Graphic display of the board */
@@ -592,7 +614,7 @@ public class Episode {
 	    String s = "# " + y + " |";
 	    for(int x=1; x<=Board.N; x++) {
 		int pos = (new Pos(x,y)).num();
-		String z = " .";
+		String z = html? "." :   " .";
 		if (pieces[pos]!=null) {
 		    Piece p = pieces[pos];
 		    z = p.getShape().symbol();
@@ -611,7 +633,7 @@ public class Episode {
 	}
 	w.add(div);
 	String s = "#   |";
-	for(int x=1; x<=Board.N; x++) s += "   " + x + " ";
+	for(int x=1; x<=Board.N; x++) s += "  "+(html?"": " ") + x + " ";
 	w.add(s);
 	return String.join("\n", w);
     }
@@ -652,7 +674,7 @@ public class Episode {
 	return json.toString();
     }
 
-    static final String version = "1.022";
+    static final String version = "1.025";
 
     private String readLine( LineNumberReader​ r) throws IOException {
 	out.flush();
@@ -862,9 +884,9 @@ public class Episode {
     }
 
    /** Let's just write one file at a time */
-    static private final String file_writing_lock = "Board file writing lock";
+    static final String file_writing_lock = "Board file writing lock";
 	
-    /* Saves all the recorded moves (the transcript of the episode) in a CSV file.
+    /* Saves all the recorded moves (the transcript of the episode) into a CSV file.
        <pre>
        transcripts/pid.transcript.csv
       pid,episodeId,moveNo,y,x,by,bx,code
@@ -901,8 +923,4 @@ public class Episode {
     }
 
 
-    
-
-
-    
 }

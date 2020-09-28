@@ -2,6 +2,7 @@ package edu.wisc.game.rest;
 
 import java.io.*;
 import java.util.*;
+import java.util.regex.*;
 
 import javax.xml.bind.annotation.XmlElement; 
 
@@ -18,39 +19,44 @@ public class GuessWriteReport extends FileWriteReport {
 	episode. This can be used to generate transition buttons.	
      */
     public PlayerInfo.TransitionMap getTransitionMap() { return transitionMap; }
-    //@XmlElement
-    //    void setTransitionMap(PlayerInfo.TransitionMap _destinationMap) { destinationMap = _destinationMap; }
     GuessWriteReport(File f, long _byteCnt) {
 	super(f,  _byteCnt);
     }
 
-    static FileWriteReport writeGuess( String episodeId,  String text) {
+    static FileWriteReport writeGuess( String episodeId,  String text, int guessConfidence) {
 	
 	try {
+	    if (text==null) {
+		return new FileWriteReport(true,"No guess text supplied");
+	    }
+
+	    if (guessConfidence<0) {
+		// compatibility with "level: text"
+		Pattern p = Pattern.compile("^([0-9]+):\\s*");
+		Matcher m = p.matcher(text);
+		if (m.find()) {
+		    guessConfidence = Integer.parseInt( m.group(1));
+		    text = text.substring( m.end());
+		}
+	    }
+
+	    
 	    EpisodeInfo epi = (EpisodeInfo)EpisodeInfo.locateEpisode(episodeId);
 	    if (epi==null)  {
 		return new FileWriteReport(true,"No such episode: " + episodeId);
 	    }
 	    PlayerInfo x = epi.getPlayer();
 	    String pid = x.getPlayerId();
-
-	    ParaSet para = x.getPara(epi);
-	    String ruleSetName = para.getRuleSetName();
 	    
 	    File f= Files.guessesFile(pid);
-
-	    PrintWriter w = new PrintWriter(new FileWriter(f, true));
-
-	    
-	    String ss[] = { pid, episodeId, ruleSetName, text};
-	    String data = ImportCSV.escape(ss);
-	    w.println(data);
-	    w.close();
-
+	    epi.saveGuessToFile(f, text, guessConfidence);
 	    epi.setGuessSaved(true);
 	    epi.setGuess(text);
+	    if (guessConfidence>=0) {
+		epi.setGuessConfidence(guessConfidence);
+	    }
 	    Main.persistObjects(epi);
-	    GuessWriteReport g = new	GuessWriteReport(f, f.length());
+	    GuessWriteReport g = new GuessWriteReport(f, f.length());
 	    g.transitionMap = x.new TransitionMap();
 	    return g;
 	} catch(IOException ex) {

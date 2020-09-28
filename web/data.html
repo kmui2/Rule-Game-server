@@ -4,7 +4,7 @@
 <body>
   <h1>Rule Game server data</h1>
 
-    <p align="center"><em>Updated for Ver 1.016,  2020-09-09</em></p>
+    <p align="center"><em>Updated for Ver 1.025,  2020-09-25</em></p>
 
 
   <h2>Introduction</h2>
@@ -135,6 +135,9 @@ mysql> describe  Episode;
 | PLAYER_ID       | bigint(20)   | YES  | MUL | NULL    |                |
 | guessSaved      | bit(1)       | YES  |     | NULL    |                |
 | bonusSuccessful | bit(1)       | YES  |     | NULL    |                |
+| lost            | bit(1)       | YES  |     | NULL    |                |
+| guess           | varchar(255) | YES  |     | NULL    |                |
+| guessConfidence | int(11)      | YES  |     | NULL    |                |
 +-----------------+--------------+------+-----+---------+----------------+
 </code></pre>
 
@@ -161,7 +164,9 @@ mysql> describe  Episode;
 	  <li>PLAYER_ID - MySQL internal ID of the player; only used to join with the PlayerInfo table
 	  <li>guessSaved - true if the player's guess about the rules has been submitted and recorded at the end of this episode.
 	  <li>bonusSuccessful - true if this was a bonus episode (bonus=true) and the player managed to clear the board sufficiently fast. If a required number of episodes with bonusSuccessful=true is 
-
+	  <li>lost - bit flag, set to true if the player fails to clear the board in a bonus episode within a required number of moves. Which this happens, the episode is terminated by the server, and so is series.
+	  <li>guess - the text of the guess submitted by the player at the end of the episode. NULL if no guess has been recorded.
+	  <li>guessConfidence - an integer entered by the player in the guess form, to represent his confidence in his guess on a certain numerical scale
     </ol>
 
     <h3> Exporting data from the MySQL database to CSV files</h3>
@@ -205,7 +210,7 @@ qt-07,20200910-123116-PRDLET,5,1,TRIANGLE,BLACK
 
 <h3>The transcript</h3>
 
- <p>The transripts are saved in  /opt/tomcat/saved/transcripts/ , in file names based on the PlayerID + ".transcript.csv".
+ <p>The transripts are saved in  /opt/tomcat/saved/transcripts/ , in file names based on the PlayerID + ".transcripts.csv".
 
 <pre>
 more /opt/tomcat/saved/transcripts/qt-07.transcripts.csv 
@@ -221,17 +226,47 @@ qt-07,20200910-123116-PRDLET,1,20200910-123151,5,1,7,7,0
 <p>The last column, <tt>code</tt>, contains the server response. The value of 0 is recorded when the move attempt is successful; positive values (usually 4, sometimes 2) are recorded on rejections, as per <tt><a href="api/constant-values.html#edu.wisc.game.sql.Episode.CODE.ACCEPT">CODE</a></tt>.
 
 
+  <h3>The detailed transcript</h3>
+
+<p>The detailed transripts are saved in  /opt/tomcat/saved/detailed-transcripts/ , in file names based on the PlayerID + ".-detailed-transcripts.csv".
+
+<p>The schema of these CSV files is as per Aria Duan's request (see  
+<a href="https://rulegame.slack.com/files/U014SRY7Q5Q/F01AX29T9HR/paul01.transcripts_revised.xlsx">paul01.transcripts_revised.xlsx</a> on Slack). All sequential indexes (series No., episode No., move No.) are 0-based.
+
+<pre>
+/opt/tomcat/saved/detailed-transcripts$ more qt-02.detailed-transcripts.csv 
+#playerId,trialListId,seriesNo,ruleId,episodeNo,episodeId,moveNo,timestamp,reactionTime,objectType,objectId,y,x,bucketId,by,bx,code,objectCnt
+qt-02,trial_1,1,TD-02,0,20200923-130509-VP7ECA,0,20200923-130521.677,11.829,BLUE_TRIANGLE,0,3,3,1,7,7,0,1
+qt-02,trial_1,1,TD-02,0,20200923-130509-VP7ECA,1,20200923-130535.256,13.579,BLUE_TRIANGLE,1,5,6,1,7,7,0,0
+qt-02,trial_1,1,TD-02,1,20200923-205001-F18F6J,0,20200923-205021.973,20.923,YELLOW_TRIANGLE,1,4,1,2,0,7,0,2
+qt-02,trial_1,1,TD-02,1,20200923-205001-F18F6J,1,20200923-205036.976,15.003,YELLOW_TRIANGLE,2,4,3,2,0,7,0,1
+qt-02,trial_1,1,TD-02,1,20200923-205001-F18F6J,2,20200923-205053.298,16.322,YELLOW_TRIANGLE,0,3,5,2,0,7,0,0
+qt-02,trial_1,1,TD-02,2,20200923-211803-VPL2LF,0,20200923-211813.309,10.306,BLACK_CIRCLE,1,6,2,3,0,0,0,1
+qt-02,trial_1,1,TD-02,2,20200923-211803-VPL2LF,1,20200923-211821.644,8.335,BLACK_CIRCLE,0,2,4,3,0,0,0,0
+qt-02,trial_1,1,TD-02,3,20200923-211834-AR21RU,0,20200923-211846.699,12.453,RED_TRIANGLE,1,3,4,2,0,7,4,3
+qt-02,trial_1,1,TD-02,3,20200923-211834-AR21RU,1,20200923-211858.671,11.972,RED_TRIANGLE,1,3,4,0,7,0,0,2
+qt-02,trial_1,1,TD-02,3,20200923-211834-AR21RU,2,20200923-211911.614,12.943,RED_TRIANGLE,2,6,4,0,7,0,0,1
+qt-02,trial_1,2,TD-03,0,20200923-211954-8M8E8V,0,20200923-212014.455,20.221,RED_SQUARE,1,4,3,3,0,0,0,1
+qt-02,trial_1,2,TD-03,0,20200923-211954-8M8E8V,1,20200923-212025.978,11.523,RED_SQUARE,0,3,3,1,7,7,0,0
+</pre>
+
+<p>Note that even though the name of the experiment plan to which a player belongs is not explicitly listed as a separate column; however, it can be extracted from the player Id.
+
+<p>One may also "join" this information with information from the Episode table if, for example, one wants to look at the finishCode column.
+
 <h3>The guess</h3>
 
 
  <p>The guesses are saved in  /opt/tomcat/saved/guesses/ , in file names based on the PlayerID + ".guess.csv".
 
 <pre>
-more /opt/tomcat/saved/guesses/qt-05.guesses.csv 
-qt-05,20200908-131729-0ILKQD,TD-01,ok
-qt-05,20200908-131908-6SXUPL,TD-01,should give us 2nd bonus episode now!
-qt-05,20200908-131943-MP1B3R,TD-01,must go to next series now
+/opt/tomcat/saved/guesses$ cat qt-02.guesses.csv 
+#playerId,trialListId,seriesNo,ruleId,episodeNo,episodeId,guess,quessConfidence
+qt-02,trial_1,1,TD-02,2,20200923-211803-VPL2LF,the guess will go here,3
+qt-02,trial_1,1,TD-02,3,20200923-211834-AR21RU,this episode will have lost=true,3
+qt-02,trial_1,2,TD-03,0,20200923-211954-8M8E8V,"here, is also a guess, for the next series maybe",4
 </pre>
+
 
 <h2>Working with the data</h2>
 
