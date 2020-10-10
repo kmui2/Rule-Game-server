@@ -38,7 +38,12 @@ public class EpisodeInfo extends Episode {
 
     
     Date endTime;
+    /** This is an afterthough, just for saving in SQL server. */	
     int finishCode;
+    void updateFinishCode() {
+	finishCode = getFinishCode();
+    }
+
     /** Is this episode part of the bonus series? */
     boolean bonus;
     public boolean isBonus() { return bonus; }
@@ -159,6 +164,8 @@ public class EpisodeInfo extends Episode {
 	if (isCompleted() && getPlayer()!=null) {
 	    getPlayer().ended(this);
 	}
+	// just so that it would get persisted correctly
+	updateFinishCode();
 	// must do ExtendedDisplay after the "ended()" call, to have correct reward!
 	ExtendedDisplay q = new ExtendedDisplay(_q);
 	return q;
@@ -212,7 +219,7 @@ public class EpisodeInfo extends Episode {
 		ParaSet para=p.getPara(EpisodeInfo.this);
 		movesLeftToStayInBonus = EpisodeInfo.this.movesLeftToStayInBonus();
 	
-		if (finishCode!=FINISH_CODE.NO) {
+		if (getFinishCode()!=FINISH_CODE.NO) {
 		    transitionMap = p.new TransitionMap();
 		}
 		
@@ -270,18 +277,6 @@ public class EpisodeInfo extends Episode {
 	boolean guessSaved =  EpisodeInfo.this.guessSaved;
 	/** True if the player's guess has been recorded at the end of this episode */
 	public boolean getGuessSaved() { return guessSaved; }
-
-
-	RuleSet.ReportedSrc rulesSrc = (rules==null)? null:rules.reportSrc();
-	/** A structure that describes the rules of the game being played in this episode. */
-	public RuleSet.ReportedSrc getRulesSrc() { return rulesSrc; }
-
-	int ruleLineNo = EpisodeInfo.this.ruleLineNo;
-	/** Zero-based position of the line of the rule set that the
-	    game engine is currently looking at. This line will be the
-	    first line the engine will look at when accepting the
-	    player's next move. */
-	public int getRuleLineNo() { return ruleLineNo; }
 
 	Integer movesLeftToStayInBonus = null;
 	/**

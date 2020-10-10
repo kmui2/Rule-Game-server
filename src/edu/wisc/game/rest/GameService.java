@@ -203,23 +203,16 @@ public class GameService {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     @Produces(MediaType.APPLICATION_JSON)
     public Episode.Display move(@FormParam("episode") String episodeId,
-				    @FormParam("x") String _x,
-				    @FormParam("y") String _y,
-				    @FormParam("bx") String _bx,
-				    @FormParam("by") String _by,
-				    @FormParam("cnt") String _cnt
-				    )   {
+				@FormParam("x") int x,
+				@FormParam("y") int y,
+				@FormParam("bx") int bx,
+				@FormParam("by") int by,
+				@FormParam("cnt") int cnt   )   {
 	Episode epi = EpisodeInfo.locateEpisode(episodeId);
 	if (epi==null) return dummyEpisode.new Display(Episode.CODE.NO_SUCH_EPISODE, "# Invalid episode ID");
-	try {
-	    int x = Integer.parseInt(_x);
-	    int y = Integer.parseInt(_y);
-	    int bx = Integer.parseInt(_bx);
-	    int by = Integer.parseInt(_by);
-	    int cnt = Integer.parseInt(_cnt);
-	    
+	try {	    
 	    return epi.doMove(y,x,by,bx, cnt);
-	} catch( Exception ex) {
+	} catch(IOException ex) {
 	    return epi.new Display(Episode.CODE.INVALID_ARGUMENTS, ex.getMessage());
 	}
     }
@@ -235,7 +228,31 @@ public class GameService {
 	return new PlayerResponse( playerId, exp);
     }
 
+    
+    @GET
+    @Path("/listRules")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Vector<String> 	listRules() {
+	try {
+	    return Files.listInputs("rules", ".txt");
+	} catch(IOException ex) {
+	    return null;
+	}
+    }
 
+ 
+    @GET
+    @Path("/listInitialBoards")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Vector<String> 	listInitialBoards() {
+	try {
+	    return Files.listInputs("boards", ".json");
+	} catch(IOException ex) {
+	    return null;
+	}
+    }
+
+    
     /**------------------- Just testing ------------------------*/
     /** Gets the entire parameter set, identified by name */
     @GET 
