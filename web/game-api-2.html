@@ -4,7 +4,7 @@
 <body>
   <h1>Web API for the use by the Rule Game client - second batch</h1>
 
-  <p align="center"><em>Version 1.025,  2020-09-25</em></p>
+  <p align="center"><em>Version 2.000,  2020-12-19 (a)</em></p>
 
   <p>This is the "Second Batch" (prefix=<tt>/GameService2</tt>)  of the Game Service web API calls. They are intended for use with a client app that works with players enrolled in experiments; each player is identified by a player ID, and the server assigns each player to a "trial list" (a particular track in the experiment plan with which this player ID is associated with).</p>
 
@@ -203,7 +203,7 @@
 	  row=y=<input name="y" type="text" value="1" size="2"> (both ranging 1 thru 6)<br>
 	  Destination bucket (identified by  bucket_column=bx=<input name="bx" type="text" value="7" size="2">,
 	  bucket_row=by=<input name="by" type="text" value="7" size="2"> (possible values are 0 and 7)<br>
-	  Attempted move count so far (the number of previous calls to <strong><tt>move</tt></strong> in this episode. This can also be interpreted as 0-based number of this move attempt) <input name="cnt" type="text" value="0" size="5"><br>
+	  Attempted move and pick count so far (the number of previous calls to <strong><tt>move</tt></strong> and <strong><tt>pick</tt></strong> in this episode. This can also be interpreted as the 0-based sequential number of this pick or move attempt) <input name="cnt" type="text" value="0" size="5"><br>
 	  <input type="submit">
       </form>
 
@@ -230,6 +230,21 @@ For the meaning of the output fields, see the documentation for <a href="api/edu
 
    <p>The finish code reports the current state: 0=can play (there are pieces on the board, and some can be moved), 1=finish (no pieces left on the board), 2=stalemate (there are pieces on the board, but none of them can be moved anymore).</p>
    </li>
+
+
+ <li>POST <strong><tt>/pick</tt>: Pick a piece:</strong>
+      <form method="post" action="game-data/GameService2/pick"
+	 enctype="application/x-www-form-urlencoded">
+	  Episode ID (returned by an earlier newEpisode call): <input name="episode" type="text" size="25"><br>
+	  Piece to move: column=x=<input name="x" type="text" value="1" size="2">,
+	  row=y=<input name="y" type="text" value="1" size="2"> (both ranging 1 thru 6)<br>	
+	  Attempted move and pick count so far (the number of previous calls to <strong><tt>move</tt></strong> and <strong><tt>pick</tt></strong> in this episode. This can also be interpreted as the 0-based sequential number of this pick or move attempt) <input name="cnt" type="text" value="0" size="5"><br>
+	  <input type="submit">
+      </form>
+
+The arguments to the <tt>/pick</tt> call are similar to those used in a /move call, except that there are no bucket coordinates. Unlike /move, a /pick call merely asks whether the piece in question can be moved to <em>any</em> position, but does not actually move it to anywhere.   The return value is the same JSON structure as a move call would return; look at the <tt>code</tt> field, with the same ACCEPT/DENY semantics. Here, ACCEPT (code 0) means that the piece can be moved to at least one bucket; DENY (code 4) indicates that the piece cannot be moved to any bucket.
+ </li>
+
  
 	<li>POST <strong><tt>/activateBonus:</tt> Activate the bonus for this player. The current episode (if still active) and all subsequent episode of the same series (i.e. played by the same rule) will constitute the "bonus subseries"</strong>
   <form method="post" action="game-data/GameService2/activateBonus"
@@ -305,13 +320,40 @@ Response (on success):
 
      <p>A button with value="DEFAULT" is produced after every episode, indicating the default action (continuing in the same series, switching to the next series if the current series is done, or finishing one's work after the last series). A button with value="GIVE_UP" is produced after every episode other than the last episode of a series; it indicates the player's ability to end a series prematurely (and then go to the next series, if available). A button with value="ACTIVATE" is produced after main-subseries episodes if the player is eligibile to switch to ("activate") the bonus subseries.</p>
       
-  <li>GET <strong><tt>/debug</tt></strong>: Same info as given by /player, and some more for a specified user:</strong>
+  <li>GET <strong><tt>/debug</tt></strong>: Same info as given by /player, and some more for a specified user:
         <form method="get" action="game-data/GameService2/debug"
 	 enctype="application/x-www-form-urlencoded">
 	  Player ID: <input name="playerId" type="text" value="" size="20"><br>
 	  <input type="submit">
 	</form>
-  
+
+<li>GET <strong><tt>/colorMap</tt></strong>: shows the currently supported colors. 
+        <form method="get" action="game-data/GameService2/colorMap"
+	 enctype="application/x-www-form-urlencoded">
+	  <input type="submit">
+	</form>
+	Return value: a hash map; each keys is a color name (in uppercase), and the corresponding value is a  vector of 3 integers (each number in the [0:255] ranges), describing the color in the RGB space. The data are taken from /opt/tomcat/game-data/colors/colors.csv. E.g.
+	<pre>
+	  {"RED":[220,20,0],
+	  "PINK":[220,100,100],
+	  "BLUE":[30,90,210],
+	  "errmsg":"No error",
+	  "BLACK":[0,0,0],
+	  "YELLOW":[250,240,0],
+	  "PURPLE":[200,0,200],
+	  "error":false,
+	  "GREEN":[0,250,0]}
+	</pre>
+	The hash table may also contain fields "error" and "errmsg". If an error has happened (e.g. the color map file on server could not be parsed), the error field will be set to true, and errmsg will contain an explanation of sorts.
+
+<li>Get SVG page:
+  <form method="get" action="admin/getSvg.jsp">
+    <input type="text" name="shape" value="STAR" size="20">
+    <input type="submit">
+  </form>
+
+  This should return an SVG file (e.g. /opt/tomcat/game-data/shapes/star.svg for argument STAR), with content type image/svg+xml. In the case of an error (e.g. no such file), error code 404 will be returned.
+	
   </ol>
 
 <hr>
@@ -347,6 +389,7 @@ Response (on success):
 	  <input type="submit">
       </form>
 
+      
 </ul>    
 
 <h3>Where are the input files?</h3>

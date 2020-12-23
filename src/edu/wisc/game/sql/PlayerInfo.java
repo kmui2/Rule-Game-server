@@ -86,11 +86,13 @@ public class PlayerInfo {
 	has as many Series objects as there are lines in that player's trial list.
      */
     class Series {
-	ParaSet para;
+	final ParaSet para;
+	final GameGenerator gg;
 	Vector<EpisodeInfo> episodes = new Vector<>();
 
-	Series(ParaSet _para) {
+	Series(ParaSet _para) throws IOException, IllegalInputException, ReflectiveOperationException, RuleParseException {
 	    para = _para;
+	    gg = GameGenerator.mkGameGenerator(para);
 	}
 	
 	public String toString() {
@@ -315,7 +317,8 @@ public class PlayerInfo {
 
     
     /** This is usesd when a player is first registered and a PlayerInfo object is firesst created */
-    public void initSeries(TrialList trialList) {
+    public void initSeries(TrialList trialList) throws IOException, IllegalInputException, ReflectiveOperationException, RuleParseException {
+
 	if (allSeries.size()>0) throw new IllegalArgumentException("Attempt to initialize PlayerInfor.allSeries again");
 	allSeries.clear();
 	for( ParaSet para: trialList) {
@@ -341,7 +344,7 @@ public class PlayerInfo {
       the player being persisted), and then the server
       was restarted.     
     */
-    public void restoreTransientFields() {
+    public void restoreTransientFields() throws IOException, IllegalInputException, ReflectiveOperationException, RuleParseException {
 	String exp = experimentPlan;
 	// grandfathering older (pre 1.016) entries
 	if (exp==null || exp.equals("")) {
@@ -372,6 +375,7 @@ public class PlayerInfo {
 		}
 		ser.episodes.add(epi);
 	    }
+	    ser.gg.advance(ser.episodes.size());
 	    if (needSave) saveMe();
 	}
 
@@ -426,9 +430,9 @@ public class PlayerInfo {
 	    
 	    EpisodeInfo epi = null;
 	    if (canHaveAnotherRegularEpisode()) {
-		epi = EpisodeInfo.mkEpisodeInfo(currentSeriesNo, ser.para, false);
+		epi = EpisodeInfo.mkEpisodeInfo(currentSeriesNo, ser.gg, ser.para, false);
 	    } else if (canHaveAnotherBonusEpisode()) {
-		epi = EpisodeInfo.mkEpisodeInfo(currentSeriesNo, ser.para, true);
+		epi = EpisodeInfo.mkEpisodeInfo(currentSeriesNo, ser.gg, ser.para, true);
 	    }
 
 	    if (epi!=null) {
@@ -527,14 +531,17 @@ public class PlayerInfo {
     
     
     /** This method is called after an episode completes. It computes
-	rewards (if the board has been cleared), calls the SQL persist operations,
-	writes CSV files, and, if needed, switches the series and subseries. */
+	rewards (if the board has been cleared), calls the SQL persist
+	operations, writes CSV files, and, if needed, switches the
+	series and subseries. The formula for the reward computation is 
+	at https://www.desmos.com/calculator/9nyuxjy7ri .
+    */
     void ended(EpisodeInfo epi) throws IOException {
 	Series ser = whoseEpisode(epi);
 	if (ser==null) throw new IllegalArgumentException("Could not figure to which series this episode belongs");
 	epi.endTime=new Date();
 	
-	if (epi.stalemate) {
+	if (epi.stalemate) {	    
 	    // The experimenters should try to design rule sets so that stalemates
 	    // do not happen; but if one does, let just finish this series
 	    // to avoid extra annoyance for the player
@@ -552,10 +559,9 @@ public class PlayerInfo {
 	}
 
 	epi.updateFinishCode();
-
-	//Main.persistObjects(this, epi);
+	// save the data in the SQL server
 	saveMe();
-
+	// save the data in the CSV files
 	File f =  Files.boardsFile(playerId);
 	epi.getCurrentBoard(true).saveToFile(playerId, epi.episodeId, f);
 	f =  Files.transcriptsFile(playerId);

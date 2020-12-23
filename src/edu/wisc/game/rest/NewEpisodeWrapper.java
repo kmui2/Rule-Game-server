@@ -54,14 +54,19 @@ public class NewEpisodeWrapper extends ResponseBase {
 	    if (boardName!=null && boardName.trim().length()>0 && !boardName.equalsIgnoreCase("null")) {
 		boardName = boardName.trim();
 		File bf = Files.initialBoardFile(boardName);
-		if (!bf.canRead())  throw new IOException("Cannot read board file: " +bf);
+		if (!bf.canRead()) {
+		    //		    Logging.errror("Cannot read board file: " +bf);
+		    throw new IOException("Cannot read board file: " +bf);
+		}
 		Board board = Board.readBoard(bf);
 		game = new Game(rules, board);
 	    } else {
 	
 		if (nPieces<=0 || nPieces>Board.N * Board.N) throw new IOException("Invalid #pieces=" + nPieces);
 
-		game = new  Game(rules, nPieces, nShapes, nColors);
+		game = new  Game(rules, nPieces, nShapes, nColors,
+					 Piece.Shape.legacyShapes,
+					 Piece.Color.legacyColors);
 	    }
 	    Episode epi = new Episode(game, Episode.OutputMode.BRIEF, null, null); //in, out);
 

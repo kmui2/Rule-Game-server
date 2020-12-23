@@ -104,20 +104,8 @@ public class EpisodeInfo extends Episode {
 
     /** Creates a new episode, whose rules and initial board are based (with 
 	appropriate randomization) on a specified parameter set */
-    static EpisodeInfo mkEpisodeInfo(int seriesNo, ParaSet para, boolean bonus)
+    static EpisodeInfo mkEpisodeInfo(int seriesNo, GameGenerator gg, ParaSet para, boolean bonus)
 	throws IOException, RuleParseException {
-
-	String ruleSetName = para.getRuleSetName();
-	int[] nPiecesRange = {para.getInt("min_objects"),
-			      para.getInt("max_objects")},
-
-	    nShapesRange = {para.getInt("min_shapes"),
-			    para.getInt("max_shapes")},
-	    nColorsRange = {para.getInt("min_colors"),
-			    para.getInt("max_colors")};
-
-	GameGenerator gg =new GameGenerator(ruleSetName, nPiecesRange, nShapesRange,
-					    nColorsRange);    
 	   
 	Game game = gg.nextGame();
 	EpisodeInfo epi = new EpisodeInfo(game, para);
@@ -332,7 +320,7 @@ public class EpisodeInfo extends Episode {
        Date prevTime = getStartTime();
        int objectCnt = getNPiecesStart();
        Vector<String> lines=new  Vector<String>();
-       for(Move move: transcript) {
+       for(Pick move: transcript) {
 	   h.clear();
 	   h.put( "playerId", x.getPlayerId());
 	   h.put( "trialListId", x.getTrialListId());
@@ -354,10 +342,20 @@ public class EpisodeInfo extends Episode {
 	   Board.Pos q = new Board.Pos(move.pos);
 	   h.put("y", q.y);
 	   h.put("x", q.x);
-	   h.put("bucketId", move.bucketNo);
-	   Board.Pos b = Board.buckets[move.bucketNo];
-	   h.put("by", b.y);
-	   h.put("bx", b.x);
+
+	   if (move instanceof Move) { // a real move with a destination
+	       Move m = (Move)move;
+	       h.put("bucketId", m.bucketNo);	   
+	       Board.Pos b = Board.buckets[m.bucketNo];
+	       h.put("by", b.y);
+	       h.put("bx", b.x);	       
+	   } else { // just a pick -- no destination
+	       h.put("bucketId", "");
+	       h.put("by", "");
+	       h.put("bx", "");	       
+	   }
+
+	   
 	   h.put("code",move.code);
 	   if (move.code==CODE.ACCEPT) 	   objectCnt--;
 	   h.put("objectCnt",objectCnt);

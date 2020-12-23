@@ -13,6 +13,7 @@ import edu.wisc.game.reflect.*;
 import edu.wisc.game.engine.*;
 import edu.wisc.game.parser.*;
 import edu.wisc.game.sql.Board.Pos;
+import edu.wisc.game.rest.ColorMap;
 import edu.wisc.game.engine.RuleSet.BucketSelector;
 import edu.wisc.game.formatter.*;
 
@@ -47,22 +48,37 @@ public class Episode {
 
     // The number of buckets
     static final int NBU = Board.buckets.length; // 4
-    
-    public static class Move {
+
+    /** A Pick instance describes the act of picking a piece, without 
+	specifying its destination */
+    public static class Pick {
 	/** The position of the piece being moved, in the [1:N*N] range */
-	int pos;
+	final int pos;
+	Pick(int _pos) { pos = _pos; }
 	int pieceId = -1;
 	public int getPos() { return pos; }
-        public int getPieceId() { return pieceId; }
- 	/** (Attempted) destination, in the [0:3] range */
-	int bucketNo;
-	public int getBucketNo() { return bucketNo ; }
- 	Move(int _pos, int b) { pos = _pos; bucketNo = b; }
+        public int getPieceId() { return pieceId; }	
 	Piece piece =  null;
 	/** Acceptance code; will be recorded upon processing */
 	int code;
  	public int getCode() { return code; }
 	Date time = new Date();
+	public String toString() {
+	    return "PICK " + pos;
+	}
+    }
+
+    /** A Move instance describes an [attempted] act of picking a piece
+	and dropping it into a bucket.
+     */
+    public static class Move extends Pick {
+ 	/** (Attempted) destination, in the [0:3] range */
+	final int bucketNo;
+	public int getBucketNo() { return bucketNo ; }
+ 	Move(int _pos, int b) {
+	    super(_pos);
+	    bucketNo = b;
+	}
 	public String toString() {
 	    return "MOVE " + pos + " to B" + bucketNo;
 	}
@@ -85,7 +101,7 @@ public class Episode {
     /** All successful moves so far */
     int doneMoveCnt;
     @Transient
-    Vector<Move> transcript = new Vector<>();
+    Vector<Pick> transcript = new Vector<>();
   
     /** Set when appropriate */
     boolean stalemate = false;
@@ -166,7 +182,9 @@ public class Episode {
 	    this flag after every use, and advance ruleLine */
 	boolean doneWith =false;
 
-	/** [pos][atomNo] */
+	/** acceptanceMap[pos][atomNo][dest] if the rule atom[atomNo] 
+	    in the current rule line allows moving the piece currently
+	    at pos to bucket[dest]. */
 	private BitSet[][] acceptanceMap = new BitSet[Board.N*Board.N+1][];
 	private boolean[] isMoveable = new boolean[Board.N*Board.N+1];
 
@@ -245,8 +263,8 @@ public class Episode {
 		whoAccepts[j] = new BitSet(NBU);
 		RuleSet.Atom atom = row.get(j);
 		if (atom.counter>=0 && ourCounter[j]==0) continue;
-		if (atom.shape!=null && atom.shape!=p.getShape()) continue;
-		if (atom.color!=null && atom.color!=p.getColor()) continue;
+		if (atom.shape!=null && atom.shape!=p.xgetShape()) continue;
+		if (atom.color!=null && atom.color!=p.xgetColor()) continue;
 		//System.err.println("Atom " +j+" shape and color OK");
 		if (!atom.plist.allowsPicking(pos.num(), eligibleForEachOrder)) continue;
 		//System.err.println("Atom " +j+" allowsPicking ok");
@@ -258,21 +276,31 @@ public class Episode {
 	}
 
 
-	/** Request acceptance for this move. Returns result (accept/deny);
-	    in case of acceptance, decrements appropriate counters */
-	int accept(Move move) {
+	/** Request acceptance for this move or pick. Returns result
+	    (accept/deny). In case of acceptance of a move (not just a
+	    pick), decrements appropriate counters, and removes the 
+	    piece from the board.
+	*/
+	int accept(Pick pick) {
 
 	    //System.err.println("RL.accept: "+this+", move="+ move);
 	    
 	    if (doneWith) throw  new IllegalArgumentException("Forgot to scroll?");
-	    transcript.add(move);
+	    transcript.add(pick);
 	    attemptCnt++;
 
-	    move.piece =pieces[move.pos];
-	    if (move.piece==null) return move.code=CODE.EMPTY_CELL;	    
-	    move.pieceId = (int)move.piece.getId();
+	    pick.piece =pieces[pick.pos];
+	    if (pick.piece==null) return pick.code=CODE.EMPTY_CELL;	    
+	    pick.pieceId = (int)pick.piece.getId();
 	    
-	    BitSet[] r = acceptanceMap[move.pos];
+	    if (!(pick instanceof Move)) {
+		pick.code = isMoveable[pick.pos]? CODE.ACCEPT: CODE.DENY;
+		return pick.code;
+	    }
+	    Move move  = (Move) pick;
+
+	    BitSet[] r = acceptanceMap[pick.pos];
+	    
 	    Vector<Integer> acceptingAtoms = new  Vector<>();
 	    Vector<String> v = new Vector<>();
 	    for(int j=0; j<row.size(); j++) {
@@ -294,8 +322,8 @@ public class Episode {
 	    doneMoveCnt++;
 
 	    // Remember where this piece was moved
-	    pcMap.put(move.piece.getColor(), move.bucketNo);
-	    psMap.put(move.piece.getShape(), move.bucketNo);
+	    pcMap.put(move.piece.xgetColor(), move.bucketNo);
+	    psMap.put(move.piece.xgetShape(), move.bucketNo);
 	    pMap = move.bucketNo;
 
 	    pieces[move.pos].setBuckets(new int[0]); // empty the bucket list for the removed piece
@@ -347,8 +375,8 @@ public class Episode {
 	/** Puts together the values of the variables that may be used in 
 	    finding the destination buckets */
 	BucketVarMap(Piece p) {    
-	    if (pcMap.get(p.getColor())!=null) pu(BucketSelector.pc, pcMap.get(p.getColor()));
-	    if (psMap.get(p.getShape())!=null) pu(BucketSelector.ps, psMap.get(p.getShape()));
+	    if (pcMap.get(p.xgetColor())!=null) pu(BucketSelector.pc, pcMap.get(p.xgetColor()));
+	    if (psMap.get(p.xgetShape())!=null) pu(BucketSelector.ps, psMap.get(p.xgetShape()));
 	    if (pMap!=null) pu(BucketSelector.p, pMap);
 	    Pos pos = p.pos();
 	    put(BucketSelector.Nearby.toString(), pos.nearestBucket());
@@ -419,7 +447,7 @@ public class Episode {
 	
 	rules = game.rules;
 	Board b =  game.initialBoard;
-	if (b==null) b = new Board( game.randomObjCnt, game.nShapes, game.nColors);
+	if (b==null) b = new Board( game.randomObjCnt, game.nShapes, game.nColors, game.allShapes, game.allColors);
 	nPiecesStart = b.getValue().size();
 	for(Piece p: b.getValue()) {
 	    Pos pos = p.pos();
@@ -580,10 +608,11 @@ public class Episode {
 	return true;
     }
 
+    /** The last pick or move (successful or attempt) */
     @Transient
-    private Move lastMove = null;
+    private Pick lastMove = null;
     
-    private int accept(Move move) {
+    private int accept(Pick move) {
 	lastMove = move;
 	if (stalemate) {
 	    return CODE.STALEMATE;
@@ -592,7 +621,8 @@ public class Episode {
 
 	int code = ruleLine.accept(move);
 
-	if (code==CODE.ACCEPT && !cleared && !stalemate && !givenUp) {
+	// Update the data structures describing the current rule line, acceptance, etc
+	if (move instanceof Move && code==CODE.ACCEPT && !cleared && !stalemate && !givenUp) {
 	    doPrep();
 	}
 	
@@ -609,10 +639,56 @@ public class Episode {
     
     public String graphicDisplay(boolean html) {
 
+	if (isNotPlayable() || !html) return graphicDisplayAscii(html);
+
+	String result="";
+
+	result += fm.para("Notation: (X) - a movable piece; [X] - the position to which the last move attempt (whether successful or not) was applied");
+	
+	ColorMap cm = new ColorMap();
+ 	
+	Vector<String> rows = new Vector<>();
+	
+	Vector<String> v = new Vector<>();
+	v.add(fm.td(""));
+	for(int x=1; x<=Board.N; x++) v.add(fm.td("align='center'", "" + x));
+	String topRow = fm.tr(String.join("", v));
+	rows.add(topRow);
+	
+	
+	for(int y=Board.N; y>0; y--) {
+	    v.clear();
+	    v.add(fm.td(""+y));
+
+	    for(int x=1; x<=Board.N; x++) {
+		int pos = (new Pos(x,y)).num();
+		String sh = "BLANK";
+		String hexColor = "#FFFFFF";
+
+		if (pieces[pos]!=null) {
+		    Piece p = pieces[pos];
+		    sh = p.xgetShape().toString();
+		    hexColor = "#" + cm.getHex(p.xgetColor(), true);
+		}
+		String z = "<img src=\"../../admin/getSvg.jsp?shape="+sh+"\">";
+		z = (lastMove!=null && lastMove.pos==pos) ?    "[" + z + "]" :
+		    ruleLine.isMoveable[pos]?     "(" + z + ")" :
+		    "&nbsp;" + z + "&nbsp;";		
+		v.add(fm.td("bgcolor=\"" + hexColor+"\"", z));
+	    }
+	    rows.add(fm.tr(String.join("", v)));
+	}
+	rows.add(topRow);
+	result+= fm.table("border='1'", rows);
+	return result; 
+    }
+
+    /** Retired */
+      public String graphicDisplayAscii(boolean html) {
+
 	if (isNotPlayable()) {
 	    return "This episode must have been restored from SQL server, and does not have the details necessary to show the board";
 	}
-
 	
 	Vector<String> w = new Vector<>();
 
@@ -628,10 +704,10 @@ public class Episode {
 		String z = html? "." :   " .";
 		if (pieces[pos]!=null) {
 		    Piece p = pieces[pos];
-		    z = p.getShape().symbol();
+		    z = p.xgetShape().symbol();
 		    z =  html?
-			fm.wrap("strong",fm.colored( p.getColor().toString().toLowerCase(), z)) :
-			p.getColor().symbol() + z;
+			fm.wrap("strong",fm.colored( p.xgetColor().toString().toLowerCase(), z)) :
+			p.xgetColor().symbol() + z;
 		}
 
 		z = (lastMove!=null && lastMove.pos==pos) ?    "[" + z + "]" :
@@ -685,7 +761,7 @@ public class Episode {
 	return json.toString();
     }
 
-    static final String version = "1.027";
+    static final String version = "1.029";
 
     private String readLine( LineNumberReader​ r) throws IOException {
 	out.flush();
@@ -725,17 +801,19 @@ public class Episode {
         @XmlElement
         public void setNumMovesMade(int _numMovesMade) { numMovesMade = _numMovesMade;}
 
-	private Vector<Move> transcript =  Episode.this.transcript;
+	private Vector<Pick> transcript =  Episode.this.transcript;
 	/** The list of all move attempts (successful or not) done so far
 	    in this episode */
-	public Vector<Move> getTranscript() { return transcript; }
+	public Vector<Pick> getTranscript() { return transcript; }
 
 	RuleSet.ReportedSrc rulesSrc = (rules==null)? null:rules.reportSrc();
 	/** A structure that describes the rules of the game being played in this episode. */
 	public RuleSet.ReportedSrc getRulesSrc() { return rulesSrc; }
 
 	
-	String explainCounters = Episode.this.ruleLine.explainCounters();
+	String explainCounters =
+	    Episode.this.ruleLine==null? null:
+	    Episode.this.ruleLine.explainCounters();
 	/** The "explanation" of the current state of the current rule line */
 	public String getExplainCounters() { return explainCounters; }
 	
@@ -754,22 +832,41 @@ public class Episode {
 	}
     }
 
-    /** Builds a display to be sent out over the web UI */
+    /** Builds a Display objecy to be sent out over the web UI upon a /display
+	call (rather than a /move or /pick) */
     public Display mkDisplay() {
     	return new Display(Episode.CODE.JUST_A_DISPLAY, "Display requested");
     }
- 
-    
-    public Display doMove(int y, int x, int by, int bx, int _attemptCnt) throws IOException {
+
+    /** Checks for errors in some of the arguments of a /pick or /move call.
+	@return a Display reporting an error, or null if no error has been found
+    */
+    private Display inputErrorCheck1(int y, int x, int _attemptCnt) {
 	if (isCompleted()) {
 	    return new Display(CODE.NO_GAME, "No game is on right now (cleared="+cleared+", stalemate="+stalemate+"). Use NEW to start a new game");
 	}
 
 	if (_attemptCnt != attemptCnt)  return new Display(CODE.ATTEMPT_CNT_MISMATCH, "Given attemptCnt="+_attemptCnt+", expected " + attemptCnt);
 		
-	boolean invalid=false;
 	if (x<1 || x>Board.N) return new Display(CODE.INVALID_ARGUMENTS, "Invalid input: column="+x+" out of range");
 	if (y<1 || y>Board.N) return new Display(CODE.INVALID_ARGUMENTS, "Invalid input: row="+y+" out of range");
+	return null;
+    }
+    
+    /** Evaluate a pick attempt */
+    public Display doPick(int y, int x, int _attemptCnt) throws IOException {
+	Display errorDisplay =inputErrorCheck1(y, x, _attemptCnt);
+	if (errorDisplay!=null) return errorDisplay;
+	Pos pos = new Pos(x,y);
+	Pick move = new Pick( pos.num());
+	int code = accept(move);
+	return new Display(code, mkDisplayMsg());
+    }
+    
+    /** Evaluate a move attempt */
+    public Display doMove(int y, int x, int by, int bx, int _attemptCnt) throws IOException {
+	Display errorDisplay =inputErrorCheck1(y, x, _attemptCnt);
+	if (errorDisplay!=null) return errorDisplay;
 	if (bx!=0 && bx!=Board.N+1) return new Display(CODE.INVALID_ARGUMENTS, "Invalid input: bucket column="+bx+" is not 0 or "+(Board.N+1));
 	if (by!=0 && by!=Board.N+1) return new Display(CODE.INVALID_ARGUMENTS, "Invalid input: bucket row="+by+" is not 0 or "+(Board.N+1));
 
@@ -778,17 +875,20 @@ public class Episode {
 	if (buNo<0 || buNo>=Board.buckets.length) {
 	    return new Display(CODE.INVALID_ARGUMENTS, "Invalid bucket coordinates");
 	}
-	Move move = new Move( pos.num(), buNo);
+	Move move = new Move(pos.num(), buNo);
 	int code = accept(move);
-	String msg =
+	return new Display(code, mkDisplayMsg());
+    }
+
+    /** A message to put along with the accept/deny code into the Display object */
+    private String mkDisplayMsg() {
+    	return 
 	    (outputMode==OutputMode.BRIEF) ? null:
 	    cleared?  "Game cleared - the board is clear" :
 	    stalemate?  "Stalemate - no piece can be moved any more. Apology for these rules!" :
 	    givenUp? "You have given up this episode" :
 	    null;
-	return new Display(code, msg);
     }
-
     
     /** Lets this episode play out until either all pieces are cleared, or
 	a stalemate is reached, or the player gives up (sends an EXIT or NEW command)
@@ -929,7 +1029,7 @@ public class Episode {
 	    if (f.length()==0) w.println("#pid,episodeId,moveNo,timestamp,y,x,by,bx,code");
 	    Vector<String> v = new Vector<>();
 	    int k=0;
-	    for(Move move: transcript) {
+	    for(Pick move: transcript) {
 		v.clear();
 		v.add(pid);
 		v.add(eid);
@@ -938,9 +1038,15 @@ public class Episode {
 		Board.Pos q = new Board.Pos(move.pos);
 		v.add(""+q.y);
 		v.add(""+q.x);
-		Board.Pos b = Board.buckets[move.bucketNo];
-		v.add(""+b.y);
-		v.add(""+b.x);
+		if (move instanceof Move) { // a real move with a destination
+		    Move m = (Move)move;
+		    Board.Pos b = Board.buckets[m.bucketNo];
+		    v.add(""+b.y);
+		    v.add(""+b.x);
+		} else { // just a pick -- no destination
+		    v.add("");
+		    v.add("");
+		}
 		v.add(""+move.code);
 		w.println(String.join(",", v));
 	    }
