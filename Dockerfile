@@ -1,7 +1,7 @@
 FROM tomcat:latest
 
 # Installs Ant
-ENV ANT_VERSION 1.10.8
+ENV ANT_VERSION 1.10.9
 RUN cd && \
     wget -q http://www.us.apache.org/dist//ant/binaries/apache-ant-${ANT_VERSION}-bin.tar.gz && \
     tar -xzf apache-ant-${ANT_VERSION}-bin.tar.gz && \
