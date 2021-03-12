@@ -11,6 +11,8 @@ import edu.wisc.game.parser.*;
 /** A RuleSet describes the rules of a game. */
 public class RuleSet {
 
+    /** The list of variables that can be used in the bucket
+	expression */
     public enum BucketSelector {
 	p, pc, ps,
 	//Nearby= into the nearest bucket
@@ -112,6 +114,9 @@ public class RuleSet {
 	
     }
 
+    /** A BucketList represents the information about the destination
+	buckets given in the "buckets" field of an atom.
+    */
     public static class BucketList extends Vector<Expression.ArithmeticExpression>{
 	/** Star is allowed in Kevin's syntax, and means "any bucket" */
 	BucketList( Expression.Star star) throws RuleParseException {
@@ -119,7 +124,8 @@ public class RuleSet {
 		add(new Expression.Num(j));
 	    }
 	}
-	
+
+	/*
 	BucketList( Expression.BracketList bex) throws RuleParseException {
 	    for(Expression ex: bex) {
 		if (!(ex instanceof Expression.ArithmeticExpression)) 	throw new RuleParseException("Invalid bucket specifier (not a symbol or an arithmetic expression): " + ex);
@@ -129,8 +135,9 @@ public class RuleSet {
 		add(g);
 	    }
 	}
-
-	BucketList( Expression.Num num)  {
+	*/
+	
+	BucketList(Expression.ArithmeticExpression num)  {
 	    add(num);
 	}
 
@@ -143,17 +150,21 @@ public class RuleSet {
 	    for(Expression.ArithmeticExpression ex: this) {
 		v.add(ex.toSrc());
 	    }
-	    return "[" + String.join(",",v)  + "]";	       
+	    String s = String.join(",",v);
+	    if (v.size()>0) s = "[" +s+ "]";
+	    return s;
 	}
 
-	/** To which destinations a piece can be taken?
+	/** To which destinations can a piece be taken?
 	    @param varMap Information about p, ps, pc, Nearby etc for the piece
 	    under consideration*/
 	public BitSet destinations( HashMap<String, HashSet<Integer>> varMap) {
 	    BitSet q= new BitSet(Board.buckets.length);
 	    
 	    for(Expression.ArithmeticExpression ae: this) {
-		q.or( Util.toBitSet( ae.evalSet(varMap)));
+		Set<Integer> h = ae.evalSet(varMap);
+		h = Expression.moduloNB(h);
+		q.or( Util.toBitSet(h));
 	    }
 	    return q;
 	}
@@ -264,10 +275,10 @@ public class RuleSet {
 	    plist = new PositionList(g, orders);
 	    //System.out.println("plist=" + plist);
 	    g = pex.get(4); // buckets
-	    if (g instanceof Expression.Num)  {
-		bucketList = new BucketList((Expression.Num)g);
-	    } else if (g instanceof Expression.BracketList) {
-		bucketList = new BucketList((Expression.BracketList)g);
+	    if (g instanceof Expression.ArithmeticExpression)  {
+		bucketList = new BucketList((Expression.ArithmeticExpression)g);
+		// } else if (g instanceof Expression.BracketList) {
+		//bucketList = new BucketList((Expression.BracketList)g);
 	    } else if (g instanceof Expression.Star) {
 		// for compatibility with Kevin's syntax
 		bucketList = new BucketList((Expression.Star)g);
@@ -326,7 +337,8 @@ public class RuleSet {
 	    
 	    // fixme: keep using ex!
 	    while(tokens.size()>0) {
-		Expression ex = Expression.mkExpression(tokens);
+		//Expression ex = Expression.mkExpression(tokens);
+		Expression ex = Expression.mkCounterOrAtom( tokens);
 
 		if (first) {
 		    first=false;
@@ -364,6 +376,25 @@ public class RuleSet {
 	    for(Atom atom: this) atom.forceOrder(orderName);
 	}
 
+	/** Lists all shapes used in this row. */
+	HashSet<Piece.Shape> listAllShapes() {
+	    HashSet<Piece.Shape> h = new HashSet<>();
+	    for(Atom atom: this) {
+		if (atom.shapes==null) continue;
+		for(Piece.Shape shape: atom.shapes) h.add(shape);
+	    }
+	    return h;
+	}
+	/** Lists all colors used in this row. */
+	HashSet<Piece.Color> listAllColors() {
+	    HashSet<Piece.Color> h = new HashSet<>();
+	    for(Atom atom: this) {
+		if (atom.colors==null) continue;
+		for(Piece.Color color: atom.colors) h.add(color);
+	    }
+	    return h;
+	}
+	
     }
 
     /** All orders */
@@ -375,26 +406,31 @@ public class RuleSet {
 	this( ruleText.split("\n"));
     }
 
-    /** @param rr The lines  from the rule set file */
+    /** Creates a RuleSet based on the content of a rule set file. 
+	The file may contain some (optional) custom order definition
+	lines, followed by one or more rule lines.
+	@param rr The lines  from the rule set file */
     public RuleSet(String[] rr) throws RuleParseException {
 	for(String r: rr) {
 	    r = r.trim();
-	    if (r.startsWith("#") || r.length()==0) continue;
+	    if (r.startsWith("#") || r.length()==0) continue; // skip comment lines and blank lines
 
 
 	    Vector<Token> tokens= Token.tokenize(r);
 	    if (tokens.size()==0) throw new RuleParseException("No data found in the line: " + r);
 	    if (rows.size()==0 && tokens.get(0).type==Token.Type.ID &&
-		tokens.get(0).sVal.equalsIgnoreCase("Order")) { // order line
+		tokens.get(0).sVal.equalsIgnoreCase("Order")) { // order line:
+		// Order Name=[1,2,3,....]
 		tokens.remove(0);
 		if (tokens.size()==0 || tokens.get(0).type!=Token.Type.ID )  throw new RuleParseException("Missing order name in an order line: " + r);
 		String name = tokens.get(0).sVal;
 		tokens.remove(0);
 		if (tokens.size()==0 ||  tokens.get(0).type!=Token.Type.EQUAL)  throw new RuleParseException("Missing equal sign in an order line: " + r);
 		tokens.remove(0);
-		Expression ex = Expression.mkExpression(tokens);
-		if (!(ex instanceof Expression.BracketList) || tokens.size()>0) throw new RuleParseException("Invalid order description: " +r);	
-		orders.put(name, new Order((Expression.BracketList)ex));
+		// Expects a bracket list of integers
+		Expression.BracketList ex = Expression.mkBracketList(tokens);
+		if (tokens.size()>0) throw new RuleParseException("Invalid order description: " +r);	
+		orders.put(name, new Order(ex));
 		continue;
 	    }
 		
@@ -459,6 +495,20 @@ public class RuleSet {
 	for(Row row: rows) row.forceOrder(orderName);
     }
 
+    /** Lists all shapes used in this rule set. */
+    public HashSet<Piece.Shape> listAllShapes() {
+	HashSet<Piece.Shape> h = new HashSet<>();
+	for(Row row: rows) h.addAll(row.listAllShapes());
+	return h;
+    }
+    
+    /** Lists all colors used in this rule set. */
+    public HashSet<Piece.Color> listAllColors() {
+	HashSet<Piece.Color> h = new HashSet<>();
+	for(Row row: rows) h.addAll(row.listAllColors());
+	return h;
+    }
+	
     
     public static void main(String[] argv) throws IOException,  RuleParseException {
 	System.out.println("Have " + argv.length + " files to read");

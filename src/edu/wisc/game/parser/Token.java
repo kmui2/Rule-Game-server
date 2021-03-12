@@ -9,7 +9,9 @@ import edu.wisc.game.util.Util;
 /** A token represents an element of the input text. Used in parsing rules. */
 public class Token {
     
-    public enum Type { NUMBER, ID, STRING, COMMA, MULT_OP, ADD_OP, OPEN, CLOSE, EQUAL};
+    //static void foo1(){};
+
+    public enum Type { NUMBER, ID, STRING, COMMA, MULT_OP, ADD_OP, EQQ /* == */, UNARY_OP, OPEN, CLOSE, EQUAL /* = */};
     public final Type type;
     public char cVal=0;
     public String sVal=null;
@@ -36,7 +38,19 @@ public class Token {
 	 return
 	     (type == Type.NUMBER) ? ""+nVal:
 	     (type == Type.ID) ? sVal:
+	     (type == Type.EQQ) ? sVal:
 	     (type == Type.STRING) ? '"' + sVal + '"':
+	     ""+cVal;
+    }   
+
+    /** Re-imagines the token as an element of a command line. Used 
+	for compatibility purposes in the Captive Game Server. */
+    public String toArgv() {
+	 return
+	     (type == Type.NUMBER) ? ""+nVal:
+	     (type == Type.ID) ? sVal:
+	     (type == Type.STRING) ? sVal:
+	     (type == Type.EQQ) ? sVal:
 	     ""+cVal;
     }   
 
@@ -48,6 +62,7 @@ public class Token {
 	    c==','? Type.COMMA:
 	    c=='+' || c=='-'? Type.ADD_OP:
 	    c=='*' || c=='/' || c=='%' ? Type.MULT_OP:
+	    c=='!' ? Type.UNARY_OP:
 	    c=='(' || c=='['? Type.OPEN:
 	    c==')' || c==']'? Type.CLOSE:
 	    c=='"' ? Type.STRING:
@@ -57,12 +72,30 @@ public class Token {
 	cVal=c;
 	sVal= (type==Type.STRING)? "" :  "" + c;
     }
+
+    /** Only used for Type.EQQ */
+    private Token(Type _type, String _sVal) { //throws RuleParseException {
+	type = _type;
+	sVal = _sVal;
+    }
+
+
+    private static Token wrapToken(char c) {
+	try {
+	    return new Token(c);
+	} catch(Exception ex) { return null; }
+    }
+    
+    static final Token EQQ = new Token(Type.EQQ, "==");
+    static final Token BANG = wrapToken('!');
+    static final Token STAR = wrapToken('*');
+    
     /** Sets other fields based on type and sVal */
     private void complete() {
 	if (type==Type.NUMBER) {
 	    nVal = Integer.parseInt(sVal);
 	    cVal=0;
-	} else if (type==Type.ID || type==Type.STRING) {
+	} else if (type==Type.ID || type==Type.STRING || type==Type.EQQ) {
 	    cVal=0;
 	} else {
 	    cVal=sVal.charAt(0);
@@ -77,7 +110,7 @@ public class Token {
 	private Token currentToken=null;
 
 	Tokenizer(String x) throws RuleParseException {
-	    for(int i=0; i<x.length(); i++) {
+	    for(int i=0; i<x.length() && !commentHasStarted; i++) {		
 		addC(x.charAt(i));
 	    }
 	    flush();
@@ -90,6 +123,8 @@ public class Token {
 	    currentToken = null;	
 	}
 
+	private boolean commentHasStarted = false;
+	
 	private void  addC(char c) throws RuleParseException {
 	    if (currentToken!=null) {
 		if (Character.isDigit(c) && currentToken.type==Type.NUMBER ||
@@ -104,12 +139,20 @@ public class Token {
 			currentToken.sVal += c;
 			return;
 		    }
+		} else if (currentToken.type==Type.EQUAL && c=='=') {
+		    // Instead of EQUAL '=' it is now EQQ '=='		    
+		    currentToken=EQQ;
+		    flush();
+		    return;
 		} else {
 		    flush();
 		}
 	    }
 	    if (Character.isWhitespace(c)) {
 		flush();
+		return;
+	    } else if (c=='#') { // comment ends the line
+		commentHasStarted = true;
 		return;
 	    }
 	    currentToken= new Token(c);	
@@ -137,6 +180,12 @@ public class Token {
 	h.put("two", 2);
     	h.put("three", 3);
 	h.put("four", 4);
+	HashMap<String, HashSet<Integer>> hh = new HashMap<>();
+	for(String key: h.keySet()) {
+	    HashSet<Integer> z = new HashSet<>();
+	    z.add(h.get(key));
+	    hh.put(key, z);
+	}
 
 	InputStream in = System.in;
 	LineNumberReader reader = new LineNumberReader(new InputStreamReader(System.in));
@@ -146,14 +195,20 @@ public class Token {
 	    System.out.println(toString(q));
 
 	    try {
-		Expression ex = Expression.mkExpression(q);
-		
+		//Expression ex = Expression.mkExpression(q);
+		Expression ex = Expression.mkLongestArithmeticExpression(q);
+		     
 		System.out.println("E=" + ex);
+		System.out.println("Class=" + ex.getClass());
 		
 		if (ex instanceof Expression.ArithmeticExpression) {
 		    Expression.ArithmeticExpression ae = (Expression.ArithmeticExpression)ex;
-		    
-		    System.out.println("Eval=" + ae.eval(h));
+		    HashSet<Integer> hv = ae.evalSet(hh);
+		    System.out.print("Eval=");
+		    for(Integer x: hv) System.out.print(" " + x);
+		    System.out.println();
+		} else {
+		    System.out.println("Not an arithmetic expression");
 		}
 	    } catch(RuleParseException ex) {
 		System.err.println(ex);
