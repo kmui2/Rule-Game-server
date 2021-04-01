@@ -1,5 +1,4 @@
 lib
 saved
 .idea
-game-data/colors
-game-data/shapes
+game-data

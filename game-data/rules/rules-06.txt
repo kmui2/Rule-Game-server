@@ -1,2 +1,0 @@
-#-- Different shapes go to different buckets
-(*,circle,*,*,[0]) (*,star,*,*,[2]) (*,triangle,*,*,[2]) (*,square,*,*,[2]) 

@@ -1,3 +1,0 @@
-# ruleArrayName=rule-021
-# used in game=TD-04
-(*,*,red,*,[3]) (*,*,blue,*,[2]) (*,*,black,*,[0]) (*,*,yellow,*,[1])

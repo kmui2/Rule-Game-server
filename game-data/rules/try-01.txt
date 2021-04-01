@@ -1,2 +1,0 @@
-# ruleArrayName=try-01
-(*,*,*,*,[Nearby])

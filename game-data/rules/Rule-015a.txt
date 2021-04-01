@@ -1,2 +1,0 @@
-# ruleArrayName=Rule-015a
-(*,*,red,*,[2]) (*,*,blue,*,[0]) (*,*,black,*,[3]) (*,*,yellow,*,[1])
