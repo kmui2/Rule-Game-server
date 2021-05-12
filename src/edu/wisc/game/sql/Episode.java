@@ -12,6 +12,7 @@ import edu.wisc.game.reflect.*;
 import edu.wisc.game.engine.*;
 import edu.wisc.game.parser.*;
 import edu.wisc.game.sql.Board.Pos;
+import edu.wisc.game.sql.ImageObject;
 import edu.wisc.game.rest.ColorMap;
 import edu.wisc.game.engine.RuleSet.BucketSelector;
 import edu.wisc.game.formatter.*;
@@ -83,7 +84,14 @@ public class Episode {
 	}
    }
     
-    final RuleSet rules;
+     @Transient
+    //final
+    RuleSet rules;
+    /** Only used for Episodes restored from the SQL server, 
+	just to keep the GUI client from crashing */
+    void setRules(RuleSet _rules) { rules = _rules; }
+
+    
     /** The current board: an array of N*N+1 elements (only positions
 	[1..N*N] are used), with nulls for empty cells and non-nulls
 	for positions where pieces currently are. */
@@ -123,6 +131,11 @@ public class Episode {
     /** Which bucket was the last  one to receive a piece of a given shape? */
     @Transient
     private HashMap<Piece.Shape, Integer> psMap = new HashMap<>();
+
+     /** Which bucket was the last  one to receive a piece with a given value of each property? (get(propName).get(propValue)==bucket) */
+    @Transient
+    private HashMap<String, HashMap<String, Integer>> propMap = new HashMap<>();
+  
     /** Which bucket was the last one to receive a piece? */
     @Transient
     private Integer pMap=null;
@@ -271,7 +284,7 @@ public class Episode {
 		whoAccepts[j] = new BitSet(NBU);
 		RuleSet.Atom atom = row.get(j);
 		if (atom.counter>=0 && ourCounter[j]==0) continue;
-		if (!atom.acceptsColorAndShape(p)) continue;
+		if (!atom.acceptsColorShapeAndProperties(p)) continue;
 		//System.err.println("Atom " +j+" shape and color OK");
 		if (!atom.plist.allowsPicking(pos.num(), eligibleForEachOrder)) continue;
 		//System.err.println("Atom " +j+" allowsPicking ok");
@@ -333,6 +346,15 @@ public class Episode {
 	    // Remember where this piece was moved
 	    pcMap.put(move.piece.xgetColor(), move.bucketNo);
 	    psMap.put(move.piece.xgetShape(), move.bucketNo);
+
+	    ImageObject io = move.piece.getImageObject();
+	    if (io!=null) {
+		for(String key: io.keySet()) {
+		    HashMap<String, Integer> h=propMap.get(key);
+		    if (h==null) propMap.put(key,h=new HashMap<>());
+		    h.put(io.get(key), move.bucketNo);
+		}
+	    }
 	    pMap = move.bucketNo;
 
 	    pieces[move.pos].setBuckets(new int[0]); // empty the bucket list for the removed piece
@@ -374,19 +396,30 @@ public class Episode {
     /** Contains the values of various variables that may be used in 
 	finding the destination buckets for a given piece */
     class BucketVarMap extends HashMap<String, HashSet<Integer>> {
-	
-	private void pu( BucketSelector key, int k) {
+
+	/** @param key A variable name, such as "p", "pc", "ps", or "propName.propValue" */
+	private void pu( String /*BucketSelector*/ key, int k) {
 	    HashSet<Integer> h = new  HashSet<>();
 	    h.add(k);
-	    put(key.toString(), h);
+	    put(key/*.toString()*/, h);
 	}
 	
 	/** Puts together the values of the variables that may be used in 
 	    finding the destination buckets */
-	BucketVarMap(Piece p) {    
-	    if (pcMap.get(p.xgetColor())!=null) pu(BucketSelector.pc, pcMap.get(p.xgetColor()));
-	    if (psMap.get(p.xgetShape())!=null) pu(BucketSelector.ps, psMap.get(p.xgetShape()));
-	    if (pMap!=null) pu(BucketSelector.p, pMap);
+	BucketVarMap(Piece p) {
+	    Integer z = (p.xgetColor()==null)? null: pcMap.get(p.xgetColor());
+	    if (z!=null) pu(BucketSelector.pc.toString(), z);
+	    z = (p.xgetShape()==null)? null: psMap.get(p.xgetShape());
+	    if (z!=null) pu(BucketSelector.ps.toString(), z);
+	    if (pMap!=null) pu(BucketSelector.p.toString(), pMap);
+	    ImageObject io = p.getImageObject();
+	    if (io!=null) {
+		for(String key: io.keySet()) {
+		    String val = io.get(key);
+		    z = (propMap.get(key)==null)?null:propMap.get(key).get(val);
+		    if (z!=null) pu("p."+key, z);
+		}
+	    }
 	    Pos pos = p.pos();
 	    put(BucketSelector.Nearby.toString(), pos.nearestBucket());
 	    put(BucketSelector.Remotest.toString(), pos.remotestBucket());
@@ -427,7 +460,10 @@ public class Episode {
 	return s;
     }
 
-    /** Dummy constructor; only used for error code production */
+    /** Dummy constructor; only used for error code production, and maybe
+	also by JPA when restoring a player's info (with all episodes)
+	from the database.
+    */
     public Episode() {
 	episodeId=null;
 	rules=null;
@@ -458,7 +494,13 @@ public class Episode {
 	
 	rules = game.rules;
 	Board b =  game.initialBoard;
-	if (b==null) b = new Board( game.randomObjCnt, game.nShapes, game.nColors, game.allShapes, game.allColors);
+	if (b==null) {
+	    if (game.allImages!=null) {
+		b = new Board( game.randomObjCnt,  game.allImages);
+	    } else { 
+		b = new Board( game.randomObjCnt, game.nShapes, game.nColors, game.allShapes, game.allColors);
+	    }
+	}
 	nPiecesStart = b.getValue().size();
 	for(Piece p: b.getValue()) {
 	    Pos pos = p.pos();
@@ -687,13 +729,16 @@ public class Episode {
 		int pos = (new Pos(x,y)).num();
 		String sh = "BLANK";
 		String hexColor = "#FFFFFF";
-
+		ImageObject io = null;
+		
 		if (pieces[pos]!=null) {
 		    Piece p = pieces[pos];
-		    sh = p.xgetShape().toString();
-		    hexColor = "#" + cm.getHex(p.xgetColor(), true);
+		    io = p.getImageObject();		    
+		    sh = (io!=null) ? io.key : p.xgetShape().toString();
+		    hexColor = "#"+ (io!=null? "FFFFFF" : cm.getHex(p.xgetColor(), true));
 		}
-		String z = "<img src=\"../../admin/getSvg.jsp?shape="+sh+"\">";
+		
+		String z = "<img width='80' src=\"../../GetImageServlet?image="+sh+"\">";
 		//z = (lastMove!=null && lastMove.pos==pos) ?    "[" + z + "]" :
 		//    ruleLine.isMoveable[pos]?     "(" + z + ")" :
 		//    "&nbsp;" + z + "&nbsp;";
@@ -712,7 +757,10 @@ public class Episode {
 		}
 
 		if (!padded) z = "&nbsp;" + z + "&nbsp;";
-		v.add(fm.td("bgcolor=\"" + hexColor+"\"", z));
+		String td = (io!=null)?
+		    fm.td( z):
+		    fm.td("bgcolor=\"" + hexColor+"\"", z);
+		v.add(td);
 	    }
 	    rows.add(fm.tr(String.join("", v)));
 	}
@@ -779,10 +827,17 @@ public class Episode {
     }    
     
 
+    /** Returns the current board, or, on a restored-from-SQL-server episodes,
+	null (or empty board, to keep the client from crashing).
+    */
     Board getCurrentBoard(boolean showRemoved) {
-	return ruleLine==null? null:
-	    showRemoved? new Board(pieces, removedPieces, ruleLine.moveableTo()): 
-	    new Board(pieces, null, ruleLine.moveableTo());
+	if (isNotPlayable()) {
+	    return cleared? new Board() : null;
+	} else {
+	    return new Board(pieces,
+			     (showRemoved?removedPieces:null),
+			     ruleLine.moveableTo());
+	}
     }
 
     /** Shows the current board (without removed [dropped] pieces) */
@@ -799,7 +854,7 @@ public class Episode {
 	return json.toString();
     }
 
-    public static final String version = "2.007";
+    public static final String version = "3.000";
 
     private String readLine( LineNumberReader​ r) throws IOException {
 	out.flush();

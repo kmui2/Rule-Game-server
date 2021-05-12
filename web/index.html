@@ -6,12 +6,14 @@
 
     <p>
     <ul>
-      <li>Web API: <a href="game-api.html">First Batch (for research API, without player name and SQL databasse)</a>. This also includes <a href="game-api.html#html">HTML play (old version)</a>, an HTML-GUI interface for the first batch API.
+      <li>[Obsolete]: Web API: <a href="game-api.html">First Batch (for research API, without player name and SQL databasse)</a>. This also includes <a href="game-api.html#html">HTML play (old version)</a>, an HTML-GUI interface for the first batch API.
       <li>Web API: <a href="game-api-2.html">Second Batch (in use for the main public-facing API)</a>. This page also includes:<ul>
-	  <li><a href="game-api-2.html#html">HTML play</a> (second batch),
+	  <li><a href="html-play.jsp">HTML play</a> (second batch),
 	  <li>the	<a href="game-api-2.html#clear">clear tables tool</a>,
 	  <li>the
-	    <a href="game-api-2.html#checkPlan">experiment plan validation tool</a>.
+	    <a href="check-plan-form.jsp">experiment plan validation tool</a>.
+	    <!-- a href="game-api-2.html#checkPlan">experiment plan validation tool.</a -->
+	  <li><a href="game-api-2.html#GetImageServlet">GetImageServlet</a> (since ver. 3.0)
 	</ul>
       <li><a href="control-flow.html">About the initial board settings and the control flow</a>
       <li><a href="balancing.html">About the balancing algorithm</a>, used to assign players to trial lists.
@@ -60,19 +62,34 @@
       <h2>The front-end (GUI) tools, from Kevin</h2>
       <ul>
 	<li><a href="http://sapir.psych.wisc.edu/rule-game-board-builder/dev/">Board builder</a> (dev)
-	<li>GUI play (prod), with 
+	<li><strong>GUI play (prod)</strong>, with 
 	  <form method="get"
 		action="http://sapir.psych.wisc.edu/rule-game/prod/">
-	    exp=<input type="text" name="exp" size="30" value="vmColorTest">,
-	    workerId=<input type="text" name="workerId" size="30" value="testing123kevinshapecolor">
+	    <table>
+	      <tr><td>
+		  exp=<input type="text" name="exp" size="30" value="vmColorTest">
+		  <td>
+<input type="radio" name="intro" value="true" checked>Show intro
+<tr><td>
+    workerId=<input type="text" name="workerId" size="30" value="testing123kevinshapecolor">
+    <td>
+<input type="radio" name="intro" value="false">Skip intro
+</table>
 	    <button type="submit">Play!</button>
 	      </form>
-	      
+
+	<li><a href="front-end-form.jsp">GUI play (dev)</a>
+	  
 	<li>GUI play (dev), with 
 	  <form method="get"
 		action="http://sapir.psych.wisc.edu/rule-game/dev/">
 	    exp=<input type="text" name="exp" size="30" value="vmColorTest">,
 	    workerId=<input type="text" name="workerId" size="30" value="testing123kevinshapecolor">
+	    
+	    <input type="radio" name="intro" value="true" checked>Show intro
+	    <input type="radio" name="intro" value="false">Skip intro
+
+	    
 	    <button type="submit">Play!</button>
 	      </form>
 	      

@@ -4,7 +4,7 @@
 <body>
   <h1>Web API for the use by the Rule Game client - second batch</h1>
 
-  <p align="center"><em>Version 2.007,  2021-04-15</em></p>
+  <p align="center"><em>Version 3.001,  2021-05-06</em></p>
 
   <p>This is the "Second Batch" (prefix=<tt>/GameService2</tt>)  of the Game Service web API calls. They are intended for use with a client app that works with players enrolled in experiments; each player is identified by a player ID, and the server assigns each player to a "trial list" (a particular track in the experiment plan with which this player ID is associated with).</p>
 
@@ -207,8 +207,13 @@
 
 <p>Two more fields added in ver. 2.007:
 <pre>
-"trialListId":"trial_list_1", <em> Which trial list from the current experiment plan has been chosen for this player?</em>
-"ruleSetName":"TD-03",   <em> The name of the rule set contained in the current parameter set. This is a file path name, relative to the main rule set directory</em>
+"trialListId":"trial_list_1", //<em> Which trial list from the current experiment plan has been chosen for this player?</em>
+"ruleSetName":"TD-03",  //doc <em> The name of the rule set contained in the current parameter set. This is a file path name, relative to the main rule set directory</em>
+</pre>
+
+If the rule set file was specified in the param set as an absolute path, that's what you'll see here as well:
+<pre>
+"ruleSetName":"/home/vmenkov/test/rules/rule-a.txt",
 </pre>
       
  <li>POST <strong><tt>/move</tt>: Make a move:</strong>
@@ -377,16 +382,26 @@ The shape names are given using the same case as in the file names. They are not
 	If an error happens, a structure with an error field is returned instead:
 	<pre>
 {"error":true, "errmsg": "And this is why: ..."}
-	  </pre>
+	</pre>
+
+<li><a name="GetImageServlet">(Effective ver. 3.0)</a> GET <strong><tt>GetImageServlet</tt></strong> -- Get an image file:
+  <form method="get" action="GetImageServlet">
+    <input type="text" name="image" value="star.svg" size="20">
+    <input type="submit">
+  </form>
+
+  This should return an image file (in SVG, PNG, JPEG, or GIF format, e.g. /opt/tomcat/game-data/shapes/star.svg), with the content type as approprite for the file type (<tt>image/svg+xml, image/jpeg</tt> etc). In the case of an error (e.g. no such file), error code 404 will be returned.
+  
 	
-<li>GET <strong><tt>admin/getSvg.jsp</tt></strong> -- Get SVG file:
+<li>(Obsolete as of ver. 3.0)<strike>GET <strong><tt>admin/getSvg.jsp</tt></strong> -- Get SVG file:
   <form method="get" action="admin/getSvg.jsp">
     <input type="text" name="shape" value="STAR" size="20">
     <input type="submit">
   </form>
 
   This should return an SVG file (e.g. /opt/tomcat/game-data/shapes/star.svg for argument STAR), with content type image/svg+xml. In the case of an error (e.g. no such file), error code 404 will be returned.
-	
+  </strike>
+  
   </ol>
 
 <hr>
@@ -445,7 +460,7 @@ The shape names are given using the same case as in the file names. They are not
   
   <h2><a name="clear">Clear tables</a></h2>
 
-<p>For efficiency sakes, the Game Service tends to cache certain data, such as parsed rule sets. If you modify a trial list file or a rule set file that already exists under /opt/tomcat/game-data, you may want to force the server to purge its stored tables, to ensure that your updated files will be re-read.
+<p>For efficiency's sake, the Game Service tends to cache certain data, such as parsed rule sets or object property tables. If you modify a trial list file or a rule set file that already exists under <tt>/opt/tomcat/game-data</tt>, you may want to force the server to purge its stored tables, to ensure that your updated files will be re-read. If any players are playing at this time, clearing the table may cause a slight delay for them (as all necessary tables are re-read), but no disruption of their games.
 
   <form method="post" action="game-data/CheckPlanService/clearTables"
 	 enctype="application/x-www-form-urlencoded">    
@@ -454,7 +469,7 @@ The shape names are given using the same case as in the file names. They are not
   
   <h2><a name="checkPlan">Validate your experiment plan</a></h2>
 
-<P>You can use this form to check your experiment plan's input files for errors (syntax errors, references to non-existent files, attempts to generate boards with non-existence colors or shapes, etc). Just enter the name of your experiment plan and click on "Submit".
+<P>You can use the <a href="check-plan-form.jsp">experiment plan validation page</a> to check your experiment plan's experiment control files for errors (syntax errors, references to non-existent files, attempts to generate boards with non-existence colors or shapes, etc). Or if you remember the name of your plan, you can do it right here; just enter the name of your experiment plan and click on "Submit".
   
    <form method="post" action="game-data/CheckPlanService/checkPlan"
 	 enctype="application/x-www-form-urlencoded">
@@ -474,6 +489,10 @@ The shape names are given using the same case as in the file names. They are not
 <p>In /opt/tomcat/saved
   </p>
 
+
+<hr>
+
+[<a href=".">HOME</a>]
 				
 
 

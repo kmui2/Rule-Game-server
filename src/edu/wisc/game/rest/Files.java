@@ -73,7 +73,7 @@ public class Files {
 	return new File(inputDir, "trial-lists");
     }
 
-    static File shapesDir() {
+    public static File shapesDir() {
 	return new File(inputDir, "shapes");
     }
 
@@ -157,12 +157,26 @@ public class Files {
     static public File getSvgFile(Piece.Shape shape) {
 	return  getSvgFile(shape.toString());
     }
+    
     /** @param shape Case-insensitive shape name, e.g. "circle", or
 	"arrows/up". To obtain the SVG file name, the shape name
 	is converted to lower case, and ".svg" is added.
     */
     static public File getSvgFile(String shape) {
 	return new File(shapesDir(), shape.toLowerCase() + ".svg");
+    }
+
+    /** Looks for an image file with an appropriate name in the shapes directory.
+	@return A File object if a file has been found, or null otherwise
+*/
+    static public File getImageFile(String shape) {
+	File f = new File(shapesDir(), shape);
+	if (f.exists()) return f;	
+	f = new File(shapesDir() + ".svg", shape);
+	if (f.exists()) return f;
+	f = new File(shapesDir(), shape.toLowerCase() + ".svg");
+	if (f.exists()) return f;
+	return null;
     }
 
     static Vector<String> listAllShapesRecursively() throws IOException {
@@ -187,6 +201,44 @@ public class Files {
 	    }
 	}
 	return v;	
+    }
+
+    /** List all existing experiment plans (based on the directory
+	names in the appropriate tree) */
+    public static String[] listSAllExperimentPlans()  throws IOException{
+	String[] a = listAllExperimentPlanDirsInTree( trialListMainDir());
+	Arrays.sort(a);
+	return a;	
+    }
+
+    private static String[] listAllExperimentPlanDirsInTree(File root) throws IOException {
+	File[] files = root.listFiles();
+	Vector<String> v = new Vector<>();
+
+	for(File cf: files) {	    
+	    if (cf.isDirectory()) {
+		String fname = cf.getName();
+		if (TrialList.listTrialLists(cf).size()>0) {
+		    v.add(fname);
+		}
+		
+		for(String x: listAllExperimentPlanDirsInTree(cf)) {
+		    v.add(fname + File.separator + x);
+		}
+	    }
+	}
+	return v.toArray( new String[0]);
+    }
+
+    /** Creates an HTML snippet (to be used inside a FORM) listing
+	all currently existing experiment plans.
+     */
+    public static String listSAllExperimentPlansHtml()  throws IOException{
+	Vector<String> v=new Vector<>();
+	for(String exp: listSAllExperimentPlans()) {
+	    v.add( Tools.radio("exp", exp, exp, false));
+	}
+	return String.join("<br>\n", v);
     }
 
     
