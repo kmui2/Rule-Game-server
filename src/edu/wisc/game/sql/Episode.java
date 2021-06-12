@@ -135,7 +135,20 @@ public class Episode {
      /** Which bucket was the last  one to receive a piece with a given value of each property? (get(propName).get(propValue)==bucket) */
     @Transient
     private HashMap<String, HashMap<String, Integer>> propMap = new HashMap<>();
-  
+
+    private String showPropMap() {
+	Vector<String> v = new Vector<>();       
+	for(String p: propMap.keySet()) {
+	    HashMap<String, Integer> h = propMap.get(p);
+	    Vector<String> w = new Vector<>();
+	    for(String key: h.keySet()) {
+		w.add("("+key+":"+h.get(key)+")");
+	    }
+	    v.add(p + " -> " + String.join(" ", w));
+	}
+	return String.join("\n", v);
+    }
+    
     /** Which bucket was the last one to receive a piece? */
     @Transient
     private Integer pMap=null;
@@ -267,7 +280,7 @@ public class Episode {
 	*/
 	private BitSet[] pieceAcceptance(Piece p,  EligibilityForOrders eligibleForEachOrder) {
 	    
-	    //System.err.println("pieceAcceptance(p=" +p+")");
+	    //	    System.err.println("DEBUG: pieceAcceptance(p=" +p+")");
 	    if (doneWith) throw new IllegalArgumentException("Forgot to scroll?");
 
 	    if (row.globalCounter>=0 &&  ourGlobalCounter<=0)  throw new IllegalArgumentException("Forgot to set the scroll flag on 0 counter!");
@@ -287,7 +300,7 @@ public class Episode {
 		if (!atom.acceptsColorShapeAndProperties(p)) continue;
 		//System.err.println("Atom " +j+" shape and color OK");
 		if (!atom.plist.allowsPicking(pos.num(), eligibleForEachOrder)) continue;
-		//System.err.println("Atom " +j+" allowsPicking ok");
+		//System.err.println("DEBUG: Atom " +j+" allowsPicking ok");
 		BitSet d = atom.bucketList.destinations( varMap);
 		whoAccepts[j].or(d);
 		//System.err.println("pieceAcceptance(p=" +p+"), dest="+d+", whoAccepts["+j+"]=" + 	whoAccepts[j]);
@@ -344,8 +357,8 @@ public class Episode {
 	    doneMoveCnt++;
 
 	    // Remember where this piece was moved
-	    pcMap.put(move.piece.xgetColor(), move.bucketNo);
-	    psMap.put(move.piece.xgetShape(), move.bucketNo);
+	    if (move.piece.xgetColor()!=null) pcMap.put(move.piece.xgetColor(), move.bucketNo);
+	    if (move.piece.xgetShape()!=null) psMap.put(move.piece.xgetShape(), move.bucketNo);
 
 	    ImageObject io = move.piece.getImageObject();
 	    if (io!=null) {
@@ -355,6 +368,8 @@ public class Episode {
 		    h.put(io.get(key), move.bucketNo);
 		}
 	    }
+	    //System.out.println("DEBUG: propMap=\n" + showPropMap());
+	    
 	    pMap = move.bucketNo;
 
 	    pieces[move.pos].setBuckets(new int[0]); // empty the bucket list for the removed piece
@@ -423,6 +438,7 @@ public class Episode {
 	    Pos pos = p.pos();
 	    put(BucketSelector.Nearby.toString(), pos.nearestBucket());
 	    put(BucketSelector.Remotest.toString(), pos.remotestBucket());
+	    //System.out.println("DEBUG: For piece="+p+ ", BucketVarMap=" + this);
 	}
 
 
@@ -790,10 +806,16 @@ public class Episode {
 		String z = html? "." :   " .";
 		if (pieces[pos]!=null) {
 		    Piece p = pieces[pos];
-		    z = p.xgetShape().symbol();
-		    z =  html?
-			fm.wrap("strong",fm.colored( p.xgetColor().toString().toLowerCase(), z)) :
-			p.xgetColor().symbol() + z;
+		    ImageObject io = p.getImageObject();
+		    z = (io!=null)? io.symbol() :  p.xgetShape().symbol();
+		    if (html) {
+			String color =  p.getColor();
+			if (color!=null) z=fm.colored( color.toLowerCase(), z);
+			z = fm.wrap("strong",z);
+		    } else {
+			Piece.Color color = p.xgetColor();
+			if (color!=null) z = color.symbol() + z;
+		    }
 		}
 
 		z = (lastMove!=null && lastMove.pos==pos) ?    "[" + z + "]" :
@@ -854,7 +876,7 @@ public class Episode {
 	return json.toString();
     }
 
-    public static final String version = "3.000";
+    public static final String version = "3.001";
 
     private String readLine( LineNumberReader​ r) throws IOException {
 	out.flush();
@@ -879,6 +901,14 @@ public class Episode {
 	int code;
 	String errmsg;
 
+	/** A kludgy attempt to get the client not to display the board when
+	    the episode is not playable */
+	boolean error=false;
+	public boolean getError() { return error; }
+	@XmlElement
+	public void setError(boolean _error) { error = _error; }
+ 
+	
 	/** On a /move call: Has this move been accepted or rejected? (When returned by /display response, the value is -8). */
         public int getCode() { return code; }
         @XmlElement
